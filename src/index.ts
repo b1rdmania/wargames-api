@@ -549,9 +549,17 @@ app.get('/live/weather', async (_req: Request, res: Response) => {
 
 /**
  * GET /dashboard
- * Live HTML dashboard - designed to win
+ * Redirect to v2 (DOS/NORTON LAB terminal)
  */
-app.get('/dashboard', async (_req: Request, res: Response) => {
+app.get('/dashboard', (_req: Request, res: Response) => {
+  res.redirect('/dashboard/v2');
+});
+
+/**
+ * GET /dashboard/v1
+ * Original dashboard (kept for reference)
+ */
+app.get('/dashboard/v1', async (_req: Request, res: Response) => {
   res.send(`
 <!DOCTYPE html>
 <html lang="en">
