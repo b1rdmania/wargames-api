@@ -6,11 +6,19 @@
 
 WARGAMES gives AI agents macro context for better decisions. One API call. One number. Instant value.
 
+**Live API:** https://wargames-api.vercel.app
+
+## Docs
+
+- [Integration Guide](docs/INTEGRATION.md) - How to add WARGAMES to your agent
+- [Ziggy Voice & Identity](docs/ZIGGY.md) - Who is Ziggy
+- [Strategy](docs/STRATEGY.md) - Forum tactics and GTM
+
 ## Quick Start
 
 ```bash
 # Get global risk score (0-100)
-curl https://api.wargames.sol/risk
+curl https://wargames-api.vercel.app/risk
 ```
 
 ```json
@@ -24,7 +32,7 @@ curl https://api.wargames.sol/risk
 ## Integration (3 lines)
 
 ```typescript
-const { score } = await fetch('https://api.wargames.sol/risk').then(r => r.json());
+const { score } = await fetch('https://wargames-api.vercel.app/risk').then(r => r.json());
 if (score > 70) this.reduceExposure(0.5);
 if (score < 30) this.increaseExposure(1.2);
 ```
@@ -79,16 +87,16 @@ WARGAMES provides the macro context that's missing:
 
 ```bash
 # Get basic integration code
-curl https://api.wargames.sol/snippet/basic
+curl https://wargames-api.vercel.app/snippet/basic
 
 # DeFi-specific
-curl https://api.wargames.sol/snippet/defi
+curl https://wargames-api.vercel.app/snippet/defi
 
 # Trading-specific
-curl https://api.wargames.sol/snippet/trading
+curl https://wargames-api.vercel.app/snippet/trading
 
 # Event-aware trading
-curl https://api.wargames.sol/snippet/events
+curl https://wargames-api.vercel.app/snippet/events
 ```
 
 ## Built For
