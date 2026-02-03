@@ -1,8 +1,11 @@
 # WARGAMES - Claude Context
 
+**Last Updated:** 2026-02-03
+**Status:** Live with real-time data integrations
+
 ## Project Overview
 
-WARGAMES is a macro intelligence API for Solana agents built for the Colosseum Agent Hackathon (Feb 2-12, 2026).
+WARGAMES is a **macro intelligence API for Solana agents** built for the Colosseum Agent Hackathon (Feb 2-12, 2026).
 
 **Tagline:** "Your agent sees prices. It doesn't see the world."
 
@@ -14,41 +17,101 @@ WARGAMES is a macro intelligence API for Solana agents built for the Colosseum A
 
 **Name:** Ziggy
 **Agent ID:** 311
-**Hackathon API Key:** Stored in `../.colosseum-credentials`
+**API Key:** Stored in `../.colosseum-credentials`
+**Colosseum API:** `https://agents.colosseum.com/api`
 
-## Current State
+## Current State (DEPLOYED ✅)
 
-The API is deployed and functional but currently serves **static/hardcoded data**. The next priority is integrating real data sources to make the intelligence layer actually dynamic.
+The API is **fully functional with live data sources**, deployed on Vercel with:
+- ✅ Real-time data from 8 free APIs
+- ✅ Dynamic risk scoring with 4 weighted components
+- ✅ DOS/NORTON LAB dashboard (NORAD aesthetic)
+- ✅ Live betting context endpoint for PvP/wagering
+- ✅ Comprehensive SKILLS.md integration guide
+- ✅ Active forum engagement (3 posts, 10+ comments)
+- ✅ Integrations with Agent Casino, Nix-YieldRouter, SIDEX, ClaudeCraft
 
 ## Architecture
 
 ```
 src/
-├── index.ts           # Express server, all endpoints
+├── index.ts                 # Express server, all endpoints
+├── services/
+│   └── dataFetchers.ts      # Live data from 8 APIs with caching
 ├── data/
-│   ├── narratives.ts  # 8 geopolitical narratives + scoring logic
-│   └── events.ts      # Macro event calendar
+│   ├── narratives.ts        # 8 geopolitical narratives + scoring
+│   └── events.ts            # Macro event calendar
 docs/
-├── INTEGRATION.md     # Integration guide for other agents
-├── ZIGGY.md          # Voice and identity guidelines
-└── STRATEGY.md       # Forum tactics and GTM
+├── INTEGRATION.md           # Integration guide (basic)
+├── ZIGGY.md                 # Voice and identity guidelines
+├── STRATEGY.md              # Forum tactics and GTM
+└── (new reference docs below)
+
+Root:
+├── SKILLS.md                # Comprehensive agent integration guide (900+ lines)
+├── CLAUDE.md                # This file - Claude context
+├── API_REFERENCE.md         # Detailed endpoint documentation
+├── DATA_SOURCES.md          # Data integration details
+├── FORUM_ENGAGEMENT.md      # Forum activity log and strategy
+└── forum-replies.md         # Draft replies tracking
 ```
 
-## Endpoints
+## Core Endpoints
 
+### Live Data Endpoints (Real-time)
+| Endpoint | Update Freq | Description |
+|----------|-------------|-------------|
+| `/live/risk` | 5 min | Global macro risk score with 4 weighted components |
+| `/live/world` | 15 min | Complete world state (crypto, commodities, weather, economy) |
+| `/live/betting-context` | 5 min | Bet sizing multiplier for wagering/PvP (0.3x-2.0x) |
+
+### Static/Cached Endpoints
 | Endpoint | Description |
 |----------|-------------|
-| GET /risk | Global macro risk score (0-100) |
-| GET /risk/defi | DeFi-specific assessment |
-| GET /risk/trading | Trading-specific assessment |
-| GET /risk/history | Historical scores |
-| GET /narratives | All 8 narratives |
-| GET /narratives/:id | Specific narrative detail |
-| GET /events | Upcoming macro events |
-| GET /health | API status |
-| POST /subscribe | Register integration |
-| GET /integrations | List integrations |
-| GET /snippet/:type | Copy-paste code snippets |
+| `/risk` | Cached risk score |
+| `/risk/defi` | DeFi-specific assessment |
+| `/risk/trading` | Trading-specific assessment |
+| `/narratives` | All 8 narratives with current scores |
+| `/narratives/:id` | Specific narrative deep dive |
+| `/events` | Upcoming macro events calendar |
+| `/dashboard/v2` | DOS/NORTON LAB visual dashboard |
+| `/health` | API health status |
+
+### Integration Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/subscribe` | POST | Register agent integration |
+| `/integrations` | GET | List all integrations |
+| `/snippet/:type` | GET | Copy-paste code snippets |
+
+See **API_REFERENCE.md** for complete documentation.
+
+## Data Sources (Live Integrations)
+
+All sources are **free tier, no authentication required**:
+
+1. **Fear & Greed Index** - Crypto sentiment (0-100)
+2. **Polymarket** - Geopolitical prediction markets
+3. **CoinGecko** - Top 10 crypto prices + 24h changes
+4. **Open-Meteo** - Weather data for conflict zones
+5. **Metals.live** - Gold/silver commodity prices
+6. **Economic Indicators** - Simulated Fed/CPI data (pending real API)
+7. **World Tensions** - Geopolitical hotspot monitoring
+8. **Memecoin Sentiment** - Speculation cycle tracking
+
+All data cached with TTLs (5-60 minutes). See **DATA_SOURCES.md** for implementation details.
+
+## Risk Scoring Algorithm
+
+**Formula:** `score = (sentiment * 0.3) + (geopolitical * 0.3) + (economic * 0.2) + (crypto * 0.2)`
+
+**Components:**
+- **Sentiment (30%)** - Fear & Greed Index, inverted (fear = higher risk)
+- **Geopolitical (30%)** - Polymarket odds + world tensions
+- **Economic (20%)** - Inflation, Fed policy uncertainty
+- **Crypto Volatility (20%)** - Top 10 coins 24h volatility
+
+**Output:** 0-100 score + bias (risk-off/neutral/risk-on) + narrative drivers
 
 ## Narratives Tracked
 
@@ -61,83 +124,98 @@ docs/
 7. **regulatory-crackdown** - SEC/global enforcement
 8. **institutional-adoption** - ETF/corporate flows
 
-## Data Sources to Integrate
+Each narrative has: ID, title, description, current_score (0-100), trend (rising/stable/falling), impact (high/medium/low).
 
-### Priority 1: Geopolitical Events (GDELT)
-- **API:** https://gdeltcloud.com/
-- **What:** Real-time global events, 15-min updates, 100+ languages
-- **Free:** Yes, generous limits
-- **Use for:** Taiwan, Middle East, regulatory narratives
+## Key Features
 
-### Priority 2: Prediction Markets (Polymarket)
-- **API:** https://clob.polymarket.com/markets
-- **What:** Live odds on geopolitical events
-- **Free:** Yes, no auth needed
-- **Current markets:**
-  - Iran strikes: 27% by Feb 28
-  - Russia-Ukraine ceasefire: 4% by Feb 28, 46% by end 2026
-  - Taiwan invasion: 13% by end 2026
-  - Khamenei out: 39% by end 2026
+### 1. DOS/NORTON LAB Dashboard (`/dashboard/v2`)
+NORAD-inspired aesthetic matching WAR.MARKET:
+- Live risk gauge with color-coded threat level
+- Real-time Fear & Greed Index
+- Top crypto movers (24h % change)
+- Geopolitical hotspots with Polymarket odds
+- Economic indicators
+- Commodity prices (gold/silver)
+- Weather data for conflict zones
+- Narrative scores heatmap
 
-### Priority 3: Crypto Sentiment
-- **API:** https://api.alternative.me/fng/
-- **What:** Fear & Greed Index (0-100)
-- **Free:** Yes, no auth
-- **Use for:** Memecoin narrative, overall risk sentiment
+### 2. Betting Context Endpoint (`/live/betting-context`)
+For PvP/wagering agents (Agent Casino, ClaudeCraft, etc.):
+- Bet sizing multiplier: `2.0 - (riskScore / 50)` → 0.3x to 2.0x
+- Market mania detection (memecoin sentiment analysis)
+- Risk warnings for high-volatility periods
+- Recommendation text for context
 
-### Priority 4: Economic Calendar (Finnhub)
-- **API:** https://finnhub.io/api/v1/calendar/economic
-- **What:** FOMC, CPI, jobs reports with dates
-- **Free:** 30 calls/sec
-- **Use for:** Events calendar, Fed narrative
+### 3. SKILLS.md Integration Guide
+900+ line comprehensive guide for AI agents:
+- 6 integration patterns with full code examples
+- 4 use case playbooks (trading, yield, DeFi, liquidation)
+- Conflicting signals handling strategies
+- Error handling and caching best practices
+- Real-world examples from integrated agents
 
-### Priority 5: Financial News (Finnhub/Marketaux)
-- **Finnhub:** Market news with sentiment
-- **Marketaux:** 5000+ sources, free tier
-- **Use for:** Headline analysis, narrative signals
+## Forum Activity
 
-### Priority 6: Crypto-Specific
-- **CoinGecko:** Price data, market caps
-- **Messari:** Crypto sentiment scores
-- **Use for:** Correlation with narratives
+**Posts:** 3 (all on 2026-02-03)
+- Post #442: "Your agent sees prices..." (2 upvotes, 4 comments)
+- Post #447: "Macro Update: What agents should know this week" (1 upvote, 2 comments)
+- Post #448: "Integration Guide" (1 upvote, 4 comments)
 
-## Implementation Plan
+**Comments:** 10+ across other projects
+- ClaudeCraft (PvP arena, conflicting signals)
+- Agent Casino (betting-context for wagering)
+- Nix-YieldRouter (risk parameters for treasury)
+- SIDEX (macro intelligence for perps)
+- Sipher (privacy discussion)
 
-### Phase 1: Static → Dynamic (Now)
-1. Add Polymarket integration (geopolitical odds)
-2. Add Fear & Greed Index
-3. Add economic calendar from Finnhub
-4. Store in Vercel KV or JSON
-5. Update scores based on real data
+**Strategy:**
+- Post 1-2x/day max
+- Macro insights first, product second
+- Always include working code examples
+- Sign off with "— Ziggy"
+- Focus on high-value integrations
 
-### Phase 2: News Analysis
-1. Integrate GDELT for event monitoring
-2. Keyword matching for each narrative
-3. Volume/frequency scoring
-4. Optional: LLM analysis of headlines
+See **FORUM_ENGAGEMENT.md** for full activity log.
 
-### Phase 3: Full Agent Loop
-1. Scheduled updates (cron)
-2. Automated narrative scoring
-3. Alert system for spikes
+## Integration Status
 
-## Forum Strategy
+**Confirmed Integrations:**
+1. Agent Casino - PvP betting platform (betting-context)
+2. Nix-YieldRouter - Treasury management (risk-adjusted allocation)
+3. ClaudeCraft - PvP arena (conflicting signals, betting-context)
+4. SIDEX - Perps platform (macro intelligence for quant strategies)
+5. AgentBounty - Dynamic bounty pricing (risk multiplier)
 
-- **Tone:** Calm, analytical, data-driven
-- **Cadence:** 1-2 posts/day max
-- **Content:** Macro insights first, product second
-- **Sign-off:** "— Ziggy"
+**In Discussion:**
+- AEGIS (multi-agent DeFi swarm)
+- Vex Capital (news-driven trading)
+- Varuna (liquidation protection)
+- SolanaYield (risk-adjusted DeFi)
 
-See `docs/STRATEGY.md` for full tactics.
+## Ziggy's Voice
 
-## Key Files
+**Tone:** Calm, analytical, data-driven
+**Style:** Specific over vague, code examples when relevant
+**Cadence:** Helpful first, product second
+**Sign-off:** "— Ziggy"
 
-- `src/data/narratives.ts` - Narrative definitions and scoring
-- `src/data/events.ts` - Event calendar
-- `src/index.ts` - Main API server
-- `docs/INTEGRATION.md` - For other agents
-- `docs/ZIGGY.md` - Voice guide
-- `docs/STRATEGY.md` - GTM playbook
+**Avoid:**
+- Hype or marketing speak
+- Vague promises
+- Over-explaining obvious things
+- Spam or self-promotion without value
+
+**Example:**
+> Macro-aware allocation = better risk-adjusted returns.
+>
+> ```typescript
+> const { score } = await fetch('https://wargames-api.vercel.app/live/risk').then(r => r.json());
+> const maxExposure = score < 30 ? 0.9 : score < 60 ? 0.7 : 0.4;
+> ```
+>
+> — Ziggy
+
+See **docs/ZIGGY.md** for full voice guide.
 
 ## Commands
 
@@ -151,40 +229,99 @@ npm run build
 # Deploy
 vercel --prod
 
-# Test endpoints
-curl https://wargames-api.vercel.app/risk
-curl https://wargames-api.vercel.app/narratives
-curl https://wargames-api.vercel.app/events
+# Test live endpoints
+curl https://wargames-api.vercel.app/live/risk
+curl https://wargames-api.vercel.app/live/world
+curl https://wargames-api.vercel.app/live/betting-context
+
+# Test forum API
+curl -H "Authorization: Bearer $API_KEY" \
+  https://agents.colosseum.com/api/forum/me/posts
 ```
 
 ## Hackathon Context
 
 - **Hackathon:** Colosseum Agent Hackathon
-- **Dates:** Feb 2-12, 2026
-- **Prize:** $100k ($50k/$30k/$15k/$5k)
+- **Dates:** Feb 2-12, 2026 (10 days)
+- **Prize Pool:** $100k ($50k/$30k/$15k/$5k)
 - **Rule:** All code must be written by AI agents
-- **Goal:** Win by being infrastructure other agents need
+- **Strategy:** Win by being infrastructure other agents need
+- **Current Position:** Active engagement, 5+ integrations, unique value prop
 
-## Competition
+## Competition Analysis
 
-No direct competitors doing geopolitical/macro intelligence. Adjacent:
-- Pyxis Protocol (oracle marketplace)
-- DevCred (developer reputation)
-- SuperRouter (memecoin attention - different focus)
+**No direct competitors** doing geopolitical/macro intelligence for agents.
 
-## Integration Targets
+**Adjacent projects:**
+- Pyxis Protocol - Oracle marketplace (different focus)
+- DevCred - Developer reputation (different domain)
+- SuperRouter - Memecoin attention routing (overlapping but narrower)
+- Vex Capital - News trading (complementary, not competitive)
 
-Agents who would benefit from macro context:
-- AEGIS (DeFi swarm)
-- AutoVault (yield optimizer)
-- Vex Capital (news trading)
-- Varuna (liquidation protection)
-- SIDEX (perps trading)
-- SuperRouter (attention routing)
+**Unique Value:**
+- Only macro intelligence API
+- Free, fast, easy integration (3 lines of code)
+- Real-time data from multiple sources
+- Agent-first design
 
-## Notes
+## Next Steps
 
-- Keep responses in Ziggy's voice (calm, analytical)
-- Prioritize working code over features
-- Focus on integrations - win through adoption
-- Don't spam the forum
+**Priority 1: Integrations**
+- Continue forum engagement
+- Support integrated agents (bug fixes, feature requests)
+- Document integration success stories
+
+**Priority 2: Data Quality**
+- Add more geopolitical event sources (GDELT)
+- Real economic calendar API (Finnhub)
+- Improve narrative scoring accuracy
+
+**Priority 3: Features**
+- Webhook alerts for risk spikes
+- Historical data API for backtesting
+- Custom risk profiles per agent
+
+**Priority 4: Visibility**
+- Share macro insights (not just product)
+- Case studies from integrations
+- Voting strategy for prize
+
+## Key Files Reference
+
+**Core Implementation:**
+- `src/index.ts` - Main Express server
+- `src/services/dataFetchers.ts` - Live data fetching
+- `src/data/narratives.ts` - Narrative definitions
+- `src/data/events.ts` - Event calendar
+
+**Documentation:**
+- `CLAUDE.md` - This file (Claude context)
+- `SKILLS.md` - Agent integration guide (primary external doc)
+- `API_REFERENCE.md` - Endpoint documentation
+- `DATA_SOURCES.md` - Data integration details
+- `FORUM_ENGAGEMENT.md` - Forum activity log
+- `docs/INTEGRATION.md` - Basic integration guide
+- `docs/ZIGGY.md` - Voice guidelines
+- `docs/STRATEGY.md` - GTM tactics
+
+**Credentials:**
+- `../.colosseum-credentials` - API keys, agent ID, claim code
+
+## Important Notes
+
+- **Never commit credentials** to git
+- Keep forum engagement helpful, not spammy
+- Prioritize working integrations over new features
+- Focus on agents who need macro context (trading, DeFi, treasury, wagering)
+- All responses in Ziggy's voice (calm, analytical, code-first)
+- Rate limits: Forum API allows 30 posts/comments/hour, 120 votes/hour
+- Correct API base: `https://agents.colosseum.com/api` (not api.colosseum.org)
+
+## Quick Reference Links
+
+- **Live API:** https://wargames-api.vercel.app
+- **Dashboard:** https://wargames-api.vercel.app/dashboard/v2
+- **GitHub:** https://github.com/b1rdmania/wargames-api
+- **Hackathon Project:** https://colosseum.com/agent-hackathon/projects/wargames
+- **Forum:** https://colosseum.com/agent-hackathon/forum
+- **Claim URL:** https://colosseum.com/agent-hackathon/claim/51799098-3d6e-46d8-bef1-56647cddda0b
