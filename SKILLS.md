@@ -715,6 +715,176 @@ async function fetchWithTimeout(url: string, timeoutMs: number = 5000) {
 
 ## Advanced Techniques
 
+### Handling Conflicting Signals
+
+**Problem:** What if a specific narrative suggests one thing, but overall risk suggests another?
+
+**Example:** AI bubble narrative is bearish (score: 75), but overall risk is low (score: 30, bias: aggressive).
+
+**Solutions:**
+
+#### 1. Hierarchy Approach (Recommended)
+
+Use overall risk as the ceiling, narratives for fine-tuning:
+
+```typescript
+async function getExposureMultiplier(assetType: string): Promise<number> {
+  const { score } = await fetch('https://wargames-api.vercel.app/live/risk')
+    .then(r => r.json());
+
+  // Global risk sets the maximum exposure
+  const maxExposure = 1.5 - (score / 100); // 0.5x to 1.5x
+
+  // Check relevant narratives for this asset type
+  if (assetType === 'AI_TOKENS') {
+    const aiNarrative = await fetch('https://wargames-api.vercel.app/narratives/ai-bubble')
+      .then(r => r.json());
+
+    let exposureMultiplier = maxExposure;
+
+    // If AI bubble is hot, reduce AI token exposure specifically
+    if (aiNarrative.current_score > 70 && aiNarrative.trend === 'rising') {
+      exposureMultiplier *= 0.7; // 30% reduction for AI tokens
+    }
+
+    // Never exceed global risk ceiling
+    return Math.min(exposureMultiplier, maxExposure);
+  }
+
+  // For other assets, use global risk only
+  return maxExposure;
+}
+
+// Usage
+const aiTokenExposure = await getExposureMultiplier('AI_TOKENS');
+const solExposure = await getExposureMultiplier('SOL');
+// AI tokens might be 0.7x while SOL is 1.2x in same environment
+```
+
+#### 2. Weight by Specificity
+
+If trading a specific narrative, weight that narrative higher:
+
+```typescript
+async function getCustomRiskScore(assetType: string): Promise<number> {
+  const [globalRisk, narratives] = await Promise.all([
+    fetch('https://wargames-api.vercel.app/live/risk').then(r => r.json()),
+    fetch('https://wargames-api.vercel.app/narratives').then(r => r.json())
+  ]);
+
+  const weights = {
+    AI_TOKENS: {
+      global: 0.3,
+      'ai-bubble': 0.5,
+      'institutional-adoption': 0.2
+    },
+    MEMECOINS: {
+      global: 0.2,
+      'memecoin-mania': 0.6,
+      'regulatory-crackdown': 0.2
+    },
+    SOL: {
+      global: 0.7,
+      'institutional-adoption': 0.3
+    }
+  };
+
+  const assetWeights = weights[assetType] || { global: 1.0 };
+
+  let weightedScore = globalRisk.score * assetWeights.global;
+
+  for (const [narrativeId, weight] of Object.entries(assetWeights)) {
+    if (narrativeId === 'global') continue;
+
+    const narrative = narratives.narratives.find(n => n.id === narrativeId);
+    if (narrative) {
+      weightedScore += narrative.score * weight;
+    }
+  }
+
+  return Math.round(weightedScore);
+}
+```
+
+#### 3. Conflicts as Rotation Signals
+
+Conflicting signals often indicate market rotation:
+
+```typescript
+async function detectRotation(): Promise<{ from: string[]; to: string[] }> {
+  const [globalRisk, narratives] = await Promise.all([
+    fetch('https://wargames-api.vercel.app/live/risk').then(r => r.json()),
+    fetch('https://wargames-api.vercel.app/narratives').then(r => r.json())
+  ]);
+
+  const rotateFrom: string[] = [];
+  const rotateTo: string[] = [];
+
+  // Global risk is low (risk-on) but specific narrative is hot
+  if (globalRisk.score < 40) {
+    for (const narrative of narratives.narratives) {
+      if (narrative.score > 70 && narrative.trend === 'rising') {
+        // Risk-on environment, but this specific narrative is bearish
+        // → Rotate FROM this narrative's risk-off assets
+        rotateFrom.push(...narrative.crypto_impact.risk_off);
+        // → TO other risk-on assets
+        const otherNarratives = narratives.narratives.filter(
+          n => n.id !== narrative.id && n.suggested_action === 'increase_risk'
+        );
+        otherNarratives.forEach(n => rotateTo.push(...n.crypto_impact.risk_on));
+      }
+    }
+  }
+
+  return {
+    from: [...new Set(rotateFrom)],
+    to: [...new Set(rotateTo)]
+  };
+}
+
+// Example output:
+// {
+//   from: ["RNDR", "FET", "AI memecoins"],  // Avoid these even in risk-on
+//   to: ["SOL", "memecoins", "DeFi"]         // Rotate to these instead
+// }
+```
+
+#### 4. Confidence Scoring
+
+Combine signals with confidence levels:
+
+```typescript
+async function getSignalWithConfidence(asset: string) {
+  const [globalRisk, narrative] = await Promise.all([
+    fetch('https://wargames-api.vercel.app/live/risk').then(r => r.json()),
+    fetch(`https://wargames-api.vercel.app/narratives/${asset}-narrative`).then(r => r.json())
+  ]);
+
+  const signals = {
+    global: { direction: globalRisk.bias, score: globalRisk.score },
+    narrative: { direction: narrative.suggested_action, score: narrative.current_score }
+  };
+
+  // Calculate confidence
+  const scoreDiff = Math.abs(globalRisk.score - narrative.current_score);
+  const confidence = scoreDiff < 20 ? 'high' : scoreDiff < 40 ? 'medium' : 'low';
+
+  let action: string;
+  if (confidence === 'low') {
+    action = 'Conflicting signals - reduce position size and wait for clarity';
+  } else {
+    action = signals.global.score > 50 ? 'Follow global risk (defensive)' : 'Follow narrative';
+  }
+
+  return {
+    global: signals.global,
+    narrative: signals.narrative,
+    confidence,
+    recommended_action: action
+  };
+}
+```
+
 ### Multi-Source Decision Making
 
 Combine WARGAMES with on-chain data for robust decisions:

@@ -543,6 +543,91 @@ app.get('/live/weather', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /live/betting-context
+ * Betting/wagering context for PvP, prediction markets, etc.
+ * Requested by ClaudeCraft for token-wagered arena
+ */
+app.get('/live/betting-context', async (_req: Request, res: Response) => {
+  try {
+    const [risk, fearGreed] = await Promise.all([
+      calculateDynamicRisk(),
+      fetchFearGreed()
+    ]);
+
+    // Calculate bet sizing multiplier
+    // High risk = smaller bets, Low risk = bigger bets
+    const betMultiplier = Math.max(0.3, Math.min(2.0, 2.0 - (risk.score / 50)));
+
+    // Identify betting-relevant signals
+    const signals: string[] = [];
+    const warnings: string[] = [];
+
+    // Fear & Greed extreme = higher variance
+    if (fearGreed && fearGreed.value < 25) {
+      signals.push('Extreme Fear - potential for volatility spikes');
+      warnings.push('Reduce bet size by 30%');
+    } else if (fearGreed && fearGreed.value > 75) {
+      signals.push('Extreme Greed - correction risk');
+      warnings.push('Reduce bet size by 20%');
+    }
+
+    // Memecoin mania = degen season
+    const memecoinNarrative = narratives.find((n: Narrative) => n.id === 'memecoin-mania');
+    if (memecoinNarrative && memecoinNarrative.current_score > 70) {
+      signals.push('Memecoin mania hot - degen activity elevated');
+      if (memecoinNarrative.trend === 'rising') {
+        signals.push('Trend rising - capitalize on momentum');
+      }
+    }
+
+    // High geopolitical risk = delay/reduce exposure
+    if (risk.components.geopolitical > 60) {
+      signals.push('Elevated geopolitical risk');
+      warnings.push('Consider delaying wagering events');
+    }
+
+    // Generate recommendation
+    let recommendation: string;
+    if (risk.score > 70) {
+      recommendation = 'Defensive: Reduce bet sizes significantly or pause wagering';
+    } else if (risk.score > 50) {
+      recommendation = 'Cautious: Standard bet sizing with tighter risk limits';
+    } else if (risk.score < 30 && memecoinNarrative && memecoinNarrative.current_score > 60) {
+      recommendation = 'Aggressive: Risk-on environment + degen season = increase pool sizes';
+    } else {
+      recommendation = 'Neutral: Normal wagering parameters acceptable';
+    }
+
+    res.json({
+      bet_multiplier: Number(betMultiplier.toFixed(2)),
+      recommendation,
+      risk_score: risk.score,
+      bias: risk.score >= 70 ? 'defensive' : risk.score >= 50 ? 'cautious' : risk.score >= 30 ? 'neutral' : 'aggressive',
+      signals,
+      warnings,
+      sentiment: {
+        fear_greed_value: fearGreed?.value || null,
+        classification: fearGreed?.value_classification || null
+      },
+      narratives: {
+        memecoin_mania: memecoinNarrative ? {
+          score: memecoinNarrative.current_score,
+          trend: memecoinNarrative.trend
+        } : null
+      },
+      example_usage: {
+        base_bet: 100,
+        adjusted_bet: Math.round(100 * betMultiplier),
+        rationale: `Base bet: 100 USDC → ${Math.round(100 * betMultiplier)} USDC (${betMultiplier}x multiplier based on risk score ${risk.score})`
+      },
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to calculate betting context' });
+  }
+});
+
 // =============================================================================
 // DASHBOARD
 // =============================================================================
