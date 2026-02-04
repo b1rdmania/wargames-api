@@ -28,26 +28,24 @@ export async function anchorReceiptOnChain(
   receiptHash: string,
   keypair?: Keypair
 ): Promise<SolanaReceiptAnchor> {
-  // For now, simulating on-chain anchoring
-  // In production, this would:
+  // TODO: Implement real on-chain anchoring once funded wallet is available
+  // This would:
   // 1. Create a transaction with a Memo instruction containing the receipt hash
-  // 2. Sign and send the transaction
+  // 2. Sign and send the transaction to Solana
   // 3. Wait for confirmation
   // 4. Return the transaction signature and slot
-
-  // Simulated response (will be real once we have a funded wallet)
-  const mockSignature = generateMockSignature();
-  const mockSlot = Math.floor(Math.random() * 1000000) + 250000000; // Realistic slot number
-  const mockBlockTime = Math.floor(Date.now() / 1000);
+  //
+  // For now, returning structure without mock data
+  // Call anchorReceiptOnChainReal() once wallet is funded
 
   return {
     receiptId,
     receiptHash,
-    signature: mockSignature,
-    slot: mockSlot,
-    blockTime: mockBlockTime,
-    explorer_url: `https://explorer.solana.com/tx/${mockSignature}?cluster=devnet`,
-    status: 'pending' // Will be 'confirmed' then 'finalized' after blocks
+    signature: '', // Will be populated when actually anchored on-chain
+    slot: 0, // Will be populated when actually anchored on-chain
+    blockTime: Math.floor(Date.now() / 1000),
+    explorer_url: '', // Will be populated with real Solana Explorer link
+    status: 'pending' // Waiting for wallet funding to enable on-chain anchoring
   };
 }
 
@@ -114,15 +112,21 @@ export async function verifyReceiptOnChain(signature: string): Promise<{
   slot?: number;
   finalized: boolean;
 }> {
-  // Simulated verification
-  // In production, this would fetch the transaction and parse the memo
+  // TODO: Implement real on-chain verification once receipts are being anchored
+  // This would fetch the transaction from Solana RPC and parse the memo instruction
 
+  // For now, return not found since we're not actually anchoring yet
+  if (!signature || signature === '') {
+    return {
+      found: false,
+      finalized: false
+    };
+  }
+
+  // If a signature is provided, attempt to verify it
+  // (Once we start anchoring, call verifyReceiptOnChainReal instead)
   return {
-    found: true,
-    receiptId: 'receipt_simulated',
-    receiptHash: 'hash_simulated',
-    blockTime: Math.floor(Date.now() / 1000),
-    slot: 250000000,
+    found: false,
     finalized: false
   };
 }
@@ -206,18 +210,6 @@ export async function getAgentReceiptsOnChain(agentId: string): Promise<Array<{
 }
 
 /**
- * Generate mock Solana signature (for simulation)
- */
-function generateMockSignature(): string {
-  const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  let signature = '';
-  for (let i = 0; i < 88; i++) {
-    signature += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return signature;
-}
-
-/**
  * Estimate cost to anchor a receipt on Solana
  */
 export function estimateAnchorCost(): {
@@ -246,13 +238,15 @@ export function getAnchorStats(): {
   avg_confirmation_time: number; // seconds
   total_cost_sol: number;
   oldest_receipt_age_days: number;
+  note?: string;
 } {
-  // Simulated stats
+  // Real stats - currently 0 since we need a funded wallet to anchor
   return {
-    total_anchored: 58, // Matches our RADU metrics
-    total_verified: 58,
-    avg_confirmation_time: 0.6, // Solana is fast
-    total_cost_sol: 58 * 0.000005,
-    oldest_receipt_age_days: 65
+    total_anchored: 0,
+    total_verified: 0,
+    avg_confirmation_time: 0.6, // Expected: Solana is fast
+    total_cost_sol: 0,
+    oldest_receipt_age_days: 0,
+    note: 'On-chain anchoring ready to deploy. Requires funded Solana wallet to begin anchoring receipts.'
   };
 }

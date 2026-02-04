@@ -2,6 +2,10 @@
  * RADU Metrics - Risk-Adjusted Decision Uplift
  * Compare baseline strategy performance vs WARGAMES-informed decisions
  * Judge-proof EV+ evidence with verifiable receipts
+ *
+ * NOTE: This currently shows simulated backtesting results to demonstrate
+ * the evaluation methodology. In production, this would use actual trading
+ * history from agents using WARGAMES forecasts vs baseline strategies.
  */
 
 interface RADUMetrics {
@@ -56,6 +60,10 @@ interface RADUMetrics {
   };
   key_insights: string[];
   recommendation: string;
+  _meta: {
+    data_source: 'simulated' | 'production';
+    note: string;
+  };
 }
 
 interface BacktestTrade {
@@ -154,7 +162,11 @@ export async function calculateRADUMetrics(): Promise<RADUMetrics> {
     confidence,
     verifiable_evidence,
     key_insights,
-    recommendation
+    recommendation,
+    _meta: {
+      data_source: 'simulated',
+      note: 'Simulated backtesting data demonstrating evaluation methodology. Production will use actual trading history from agents using WARGAMES forecasts.'
+    }
   };
 }
 
