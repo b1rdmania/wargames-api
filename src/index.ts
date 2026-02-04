@@ -137,8 +137,11 @@ app.get('/', (_req: Request, res: Response) => {
       '/narratives/:id': 'Specific narrative detail',
       '/events': 'Upcoming macro events calendar',
       '/dashboard': 'Live visual dashboard',
+      '/dashboard/analytics': 'Real-time analytics (NORAD)',
       '/dashboard/integrations': 'Integrations showcase',
+      '/stats/live': 'Live usage statistics (JSON)',
       '/health': 'API status',
+      '/health/data': 'Data freshness monitoring',
       '/integrations': 'List all integrations (JSON)',
       '/integrations/:id': 'Get specific integration details',
       '/subscribe': 'Register for webhooks (POST)',
@@ -1835,6 +1838,252 @@ app.get('/premium/risk-detailed', async (_req: Request, res: Response) => {
  */
 app.get('/dashboard', (_req: Request, res: Response) => {
   res.redirect('/dashboard/v2');
+});
+
+/**
+ * GET /dashboard/analytics
+ * Real-time analytics dashboard (NORAD aesthetic)
+ */
+app.get('/dashboard/analytics', (_req: Request, res: Response) => {
+  const realtimeStats = getRealtimeStats();
+  const integrationStats = getAnalyticsIntegrationStats();
+  const topEndpoints = getTopEndpoints(10);
+  const callsPerHour = getCallsPerHour();
+  const percentiles = getResponseTimePercentiles();
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WARGAMES Analytics - NORAD Intelligence</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', 'Monaco', 'Courier New', monospace;
+      background: #0a0e14;
+      color: #0f0;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    .terminal-header {
+      background: #000;
+      border-bottom: 2px solid #0f0;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .terminal-title {
+      color: #0f0;
+      font-size: 1.2rem;
+      text-shadow: 0 0 10px #0f0;
+    }
+    .terminal-time {
+      color: #0a0;
+      font-size: 0.9rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      padding: 20px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    .panel {
+      background: linear-gradient(135deg, #0a1a0a 0%, #050f05 100%);
+      border: 2px solid #0a0;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+    }
+    .panel-header {
+      color: #0f0;
+      font-size: 1.1rem;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #0a0;
+      padding-bottom: 8px;
+      text-shadow: 0 0 5px #0f0;
+    }
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #0a0;
+    }
+    .metric-label { color: #0a0; }
+    .metric-value {
+      color: #0f0;
+      font-weight: bold;
+      text-shadow: 0 0 5px #0f0;
+    }
+    .status-active { color: #0f0; }
+    .status-idle { color: #ff0; }
+    .status-inactive { color: #f00; }
+    .chart-bar {
+      height: 20px;
+      background: linear-gradient(90deg, #0f0 0%, #0a0 100%);
+      margin: 5px 0;
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+      position: relative;
+    }
+    .chart-label {
+      position: absolute;
+      right: 10px;
+      color: #000;
+      font-weight: bold;
+      font-size: 0.8rem;
+    }
+    .live-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      background: #0f0;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+      box-shadow: 0 0 10px #0f0;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      color: #0a0;
+      border-top: 2px solid #0a0;
+    }
+    .nav-links {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .nav-link {
+      color: #0f0;
+      text-decoration: none;
+      border: 1px solid #0a0;
+      padding: 8px 15px;
+      transition: all 0.3s;
+    }
+    .nav-link:hover {
+      background: #0a0;
+      color: #000;
+      box-shadow: 0 0 15px #0f0;
+    }
+  </style>
+</head>
+<body>
+  <div class="terminal-header">
+    <div class="terminal-title">
+      <span class="live-indicator"></span> WARGAMES ANALYTICS :: REAL-TIME METRICS
+    </div>
+    <div class="terminal-time" id="time"></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-header">SYSTEM STATUS</div>
+      <div class="metric">
+        <span class="metric-label">API Calls (24h)</span>
+        <span class="metric-value">${realtimeStats.total_calls_24h}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Calls This Hour</span>
+        <span class="metric-value">${realtimeStats.calls_last_hour}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Calls/Hour Avg</span>
+        <span class="metric-value">${realtimeStats.calls_per_hour}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Active Integrations</span>
+        <span class="metric-value">${realtimeStats.active_integrations}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Total Tracked</span>
+        <span class="metric-value">${realtimeStats.total_tracked}</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">PERFORMANCE METRICS</div>
+      <div class="metric">
+        <span class="metric-label">Avg Response</span>
+        <span class="metric-value">${realtimeStats.avg_response_time_ms}ms</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">P50 (Median)</span>
+        <span class="metric-value">${percentiles.p50}ms</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">P95</span>
+        <span class="metric-value">${percentiles.p95}ms</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">P99</span>
+        <span class="metric-value">${percentiles.p99}ms</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Error Rate</span>
+        <span class="metric-value">${(realtimeStats.error_rate * 100).toFixed(2)}%</span>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: 1 / -1;">
+      <div class="panel-header">INTEGRATION ACTIVITY</div>
+      ${integrationStats.slice(0, 5).map(int => {
+        const activity = getIntegrationActivity(int.integrationId);
+        const statusClass = activity === 'active' ? 'status-active' : activity === 'idle' ? 'status-idle' : 'status-inactive';
+        return `
+        <div class="metric">
+          <span class="metric-label">${int.integrationId.toUpperCase()}</span>
+          <span class="metric-value">
+            <span class="${statusClass}">${activity}</span> • ${int.calls} calls • ${timeAgo(int.lastSeen)} • ${int.avgResponseTime}ms avg
+          </span>
+        </div>
+        `;
+      }).join('')}
+    </div>
+
+    <div class="panel" style="grid-column: 1 / -1;">
+      <div class="panel-header">TOP ENDPOINTS (24H)</div>
+      ${topEndpoints.map(ep => `
+        <div style="margin: 10px 0;">
+          <div style="color: #0a0; margin-bottom: 3px;">${ep.endpoint} (${ep.calls} calls, ${ep.percent}%)</div>
+          <div class="chart-bar" style="width: ${ep.percent}%">
+            <span class="chart-label">${ep.calls}</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="nav-links" style="justify-content: center; margin-bottom: 15px;">
+      <a href="/dashboard/v2" class="nav-link">MAIN DASHBOARD</a>
+      <a href="/dashboard/integrations" class="nav-link">INTEGRATIONS</a>
+      <a href="/stats/live" class="nav-link">JSON API</a>
+      <a href="/" class="nav-link">API DOCS</a>
+    </div>
+    <p>WARGAMES ANALYTICS :: BUILT BY ZIGGY (AGENT #311)</p>
+    <p style="margin-top: 10px; color: #060;">Real-time tracking • ${realtimeStats.total_tracked} requests logged</p>
+  </div>
+
+  <script>
+    function updateTime() {
+      const now = new Date();
+      document.getElementById('time').textContent = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+
+    // Auto-refresh every 30 seconds
+    setTimeout(() => location.reload(), 30000);
+  </script>
+</body>
+</html>
+  `);
 });
 
 /**
