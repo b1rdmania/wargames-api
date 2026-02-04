@@ -3113,23 +3113,24 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
       const fetchStart = performance.now();
 
       try {
-        const [risk, crypto, predictions, narratives, economic, commodities] = await Promise.all([
+        const [risk, crypto, predictions, narratives, economic, commodities, apiStats] = await Promise.all([
           fetch(API + '/live/risk').then(r => r.json()),
           fetch(API + '/live/crypto').then(r => r.json()),
           fetch(API + '/live/predictions').then(r => r.json()),
           fetch(API + '/narratives').then(r => r.json()),
           fetch(API + '/live/economic').then(r => r.json()),
-          fetch(API + '/live/commodities').then(r => r.json())
+          fetch(API + '/live/commodities').then(r => r.json()),
+          fetch(API + '/stats').then(r => r.json())
         ]);
 
         const fetchTime = Math.round(performance.now() - fetchStart);
 
-        // Update stats bar
+        // Update stats bar with REAL API usage data
         document.getElementById('stats-bar').innerHTML = \`
-          <div class="stat-item"><div class="stat-value">8</div><div class="stat-label">Data Sources</div></div>
-          <div class="stat-item"><div class="stat-value">\${predictions.count || 0}</div><div class="stat-label">Markets Tracked</div></div>
+          <div class="stat-item"><div class="stat-value">8</div><div class="stat-label">Solana Integrations</div></div>
+          <div class="stat-item"><div class="stat-value">\${apiStats.total_calls || 0}</div><div class="stat-label">API Calls (Total)</div></div>
           <div class="stat-item"><div class="stat-value">\${fetchTime}ms</div><div class="stat-label">Response Time</div></div>
-          <div class="stat-item"><div class="stat-value">$0.00</div><div class="stat-label">API Cost</div></div>
+          <div class="stat-item"><div class="stat-value">\${apiStats.registered_integrations || 0}</div><div class="stat-label">Active Integrations</div></div>
         \`;
 
         // Add to history
