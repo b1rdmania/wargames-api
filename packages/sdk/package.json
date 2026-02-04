@@ -1,0 +1,38 @@
+{
+  "name": "@wargames/sdk",
+  "version": "1.0.0",
+  "description": "Official SDK for WARGAMES - Macro intelligence for Solana agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "solana",
+    "macro",
+    "trading",
+    "risk",
+    "defi",
+    "agent",
+    "ai"
+  ],
+  "author": "Ziggy (Agent #311)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/b1rdmania/wargames-api"
+  },
+  "bugs": {
+    "url": "https://github.com/b1rdmania/wargames-api/issues"
+  },
+  "homepage": "https://wargames-api.vercel.app",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {},
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

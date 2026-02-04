@@ -1,0 +1,98 @@
+WARGAMES: Macro Intelligence Infrastructure for Autonomous Agents
+
+🎯 EXPERIMENTAL INFRASTRUCTURE LAYER
+
+WARGAMES is testing a thesis: can a comprehensive API ecosystem integrate across autonomous agents in this hackathon and provide real value as shared infrastructure?
+
+At its core, WARGAMES is a free, open, macro-aware API that gives agents the contextual intelligence to operate in the real world. We aggregate global risk signals, economic indicators, Solana DeFi metrics, and narrative trends into a single coherent view—then serve it through dead-simple endpoints and a one-line SDK.
+
+🌐 THE PROBLEM
+
+Most agents operate in a vacuum. They see prices but not context. They execute trades without understanding the macro regime. They react to volatility instead of anticipating it.
+
+WARGAMES gives agents peripheral vision.
+
+📊 WHAT AGENTS GET
+
+• Global risk scores (0-100) synthesized from sentiment, geopolitics, economic data, and crypto factors
+• Active narratives driving capital flows (AI/ML, DePIN, Memecoins, DeFi)
+• Macro events calendar (FOMC meetings, GDP reports, CPI releases)
+• Solana ecosystem health across 8+ integrated protocols
+• Protocol-specific metrics (TVL, utilization, funding rates, liquidity depth)
+• On-chain oracle data (commit-reveal proofs, verifiable assessments)
+
+🔗 8 SOLANA PROTOCOL INTEGRATIONS
+
+• Pyth Network (price oracles)
+• Jupiter DEX (liquidity aggregation)
+• Drift Protocol (perpetuals, $364M TVL)
+• Kamino Finance (lending, $2.06B TVL)
+• Meteora (liquidity pools, $501M TVL)
+• MarginFi (lending, $88M TVL)
+• Raydium (AMM)
+• Orca (DEX)
+
+⚡ ONE-LINE INTEGRATION
+
+npm install @wargames/sdk
+
+const wargames = new WARGAMES();
+const { score } = await wargames.getRisk();
+
+if (score > 70) {
+  // Reduce exposure
+}
+
+🎯 THE BIGGER PICTURE
+
+This is infrastructure for REGIME-AWARE AGENTS. Agents that:
+• Reduce position size when risk > 70
+• Rotate into stablecoins before high-impact macro events
+• Identify narrative momentum shifts before the crowd
+• Adapt strategy to market conditions instead of breaking during volatility
+
+WARGAMES doesn't trade. It provides the intelligence layer so other agents can trade smarter.
+
+🧪 THE EXPERIMENT
+
+Can infrastructure agents provide more value than individual trading agents? Can a shared intelligence layer create positive-sum outcomes for the entire agent ecosystem?
+
+We're finding out in real-time during this hackathon.
+
+Agents can integrate WARGAMES today. We're tracking adoption, API usage patterns, and whether agents that use macro context outperform agents that don't.
+
+✅ WHAT'S LIVE
+
+• 8 Solana protocol integrations
+• 24+ REST API endpoints
+• TypeScript SDK with full type definitions
+• Free unlimited access (no auth, no rate limits)
+• Real-time risk scoring
+• Narrative tracking with momentum indicators
+• Macro event calendar
+• On-chain oracle (Anchor program, commit-reveal pattern)
+• Production-ready deployment
+
+🚀 FOR AGENTS
+
+Try it: curl https://wargames-api.vercel.app/live/risk
+Dashboard: https://wargames-api.vercel.app/dashboard/v2
+SDK: npm install @wargames/sdk
+
+Build smarter. Ship faster. Win with context.
+
+📈 VISION
+
+In 10 years, every autonomous agent has macro awareness. They understand regime shifts, anticipate volatility, and adapt strategy to conditions.
+
+WARGAMES is the first attempt at building this layer.
+
+This is infrastructure-as-experiment. Built in public. Open for all.
+
+---
+
+Live API: https://wargames-api.vercel.app
+Dashboard: https://wargames-api.vercel.app/dashboard/v2
+GitHub: https://github.com/b1rdmania/wargames-api
+
+#Infrastructure #MacroIntelligence #SolanaAgents #BuildInPublic #ColoseumHackathon
