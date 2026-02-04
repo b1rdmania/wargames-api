@@ -2051,7 +2051,16 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
       font-weight: bold;
       letter-spacing: 1px;
     }
+    .chart-container {
+      position: relative;
+      height: 200px;
+      margin-top: 20px;
+    }
+    .chart-small {
+      height: 150px;
+    }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <div class="header">
@@ -2122,6 +2131,211 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     const API = '';
     const startTime = performance.now();
 
+    // Historical data storage for charts
+    const history = {
+      timestamps: [],
+      riskScores: [],
+      fearGreedValues: [],
+      maxDataPoints: 20 // Keep last 20 data points
+    };
+
+    // Chart instances
+    let riskChart = null;
+    let fearGreedChart = null;
+    let narrativesChart = null;
+
+    // Chart.js default config
+    Chart.defaults.color = '#888';
+    Chart.defaults.borderColor = '#333';
+    Chart.defaults.font.family = "'JetBrains Mono', monospace";
+
+    function addToHistory(timestamp, riskScore, fearGreedValue) {
+      history.timestamps.push(timestamp);
+      history.riskScores.push(riskScore);
+      history.fearGreedValues.push(fearGreedValue);
+
+      // Keep only last maxDataPoints
+      if (history.timestamps.length > history.maxDataPoints) {
+        history.timestamps.shift();
+        history.riskScores.shift();
+        history.fearGreedValues.shift();
+      }
+    }
+
+    function createRiskChart() {
+      const ctx = document.getElementById('riskChart');
+      if (!ctx) return;
+
+      riskChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: history.timestamps,
+          datasets: [{
+            label: 'Risk Score',
+            data: history.riskScores,
+            borderColor: '#00ff88',
+            backgroundColor: 'rgba(0, 255, 136, 0.1)',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              titleColor: '#00ff88',
+              bodyColor: '#fff'
+            }
+          },
+          scales: {
+            y: {
+              min: 0,
+              max: 100,
+              ticks: { color: '#666' },
+              grid: { color: '#222' }
+            },
+            x: {
+              ticks: {
+                color: '#666',
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 6
+              },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function createFearGreedChart() {
+      const ctx = document.getElementById('fearGreedChart');
+      if (!ctx) return;
+
+      fearGreedChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: history.timestamps,
+          datasets: [{
+            label: 'Fear & Greed',
+            data: history.fearGreedValues,
+            borderColor: '#ffaa00',
+            backgroundColor: 'rgba(255, 170, 0, 0.1)',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              titleColor: '#ffaa00',
+              bodyColor: '#fff'
+            }
+          },
+          scales: {
+            y: {
+              min: 0,
+              max: 100,
+              ticks: { color: '#666' },
+              grid: { color: '#222' }
+            },
+            x: {
+              ticks: {
+                color: '#666',
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 6
+              },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function createNarrativesChart(narratives) {
+      const ctx = document.getElementById('narrativesChart');
+      if (!ctx) return;
+
+      if (narrativesChart) {
+        narrativesChart.destroy();
+      }
+
+      const sortedNarratives = [...narratives].sort((a, b) => b.score - a.score);
+
+      narrativesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: sortedNarratives.map(n => n.name.replace(/-/g, ' ').toUpperCase()),
+          datasets: [{
+            label: 'Score',
+            data: sortedNarratives.map(n => n.score),
+            backgroundColor: sortedNarratives.map(n =>
+              n.score >= 70 ? '#ff4444' :
+              n.score >= 50 ? '#ffaa00' :
+              '#00ff88'
+            ),
+            borderWidth: 0
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              titleColor: '#00ff88',
+              bodyColor: '#fff'
+            }
+          },
+          scales: {
+            x: {
+              min: 0,
+              max: 100,
+              ticks: { color: '#666' },
+              grid: { color: '#222' }
+            },
+            y: {
+              ticks: {
+                color: '#888',
+                font: { size: 10 }
+              },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function updateCharts() {
+      if (riskChart) {
+        riskChart.data.labels = history.timestamps;
+        riskChart.data.datasets[0].data = history.riskScores;
+        riskChart.update('none'); // No animation for performance
+      }
+
+      if (fearGreedChart) {
+        fearGreedChart.data.labels = history.timestamps;
+        fearGreedChart.data.datasets[0].data = history.fearGreedValues;
+        fearGreedChart.update('none');
+      }
+    }
+
     async function fetchData() {
       const fetchStart = performance.now();
 
@@ -2145,6 +2359,11 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
           <div class="stat-item"><div class="stat-value">$0.00</div><div class="stat-label">API Cost</div></div>
         \`;
 
+        // Add to history
+        const now = new Date();
+        const timeLabel = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+        addToHistory(timeLabel, risk.score, risk.fear_greed?.value || 50);
+
         // Risk Score
         const riskClass = risk.score >= 70 ? 'high' : risk.score >= 40 ? 'medium' : 'low';
         document.getElementById('risk-card').innerHTML = \`
@@ -2155,7 +2374,15 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
           <div class="component"><span class="component-label">Geopolitical Risk</span><span class="component-value">\${risk.components?.geopolitical || '-'}</span></div>
           <div class="component"><span class="component-label">Economic Risk</span><span class="component-value">\${risk.components?.economic || '-'}</span></div>
           <div class="component"><span class="component-label">Crypto Volatility</span><span class="component-value">\${risk.components?.crypto || '-'}</span></div>
+          <div class="chart-container"><canvas id="riskChart"></canvas></div>
         \`;
+
+        // Create or update risk chart
+        if (!riskChart) {
+          createRiskChart();
+        } else {
+          updateCharts();
+        }
 
         // Fear & Greed
         if (risk.fear_greed) {
@@ -2167,11 +2394,17 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
               <div class="value" style="color: \${fgColor}">\${fg.value}</div>
               <div class="label" style="color: \${fgColor}">\${fg.value_classification}</div>
             </div>
-            <div style="text-align: center; margin-top: 15px; color: #666; font-size: 0.85rem;">
+            <div style="text-align: center; margin-top: 10px; color: #666; font-size: 0.8rem;">
               Extreme Fear = Buying Opportunity<br>
               Extreme Greed = Correction Risk
             </div>
+            <div class="chart-container chart-small"><canvas id="fearGreedChart"></canvas></div>
           \`;
+
+          // Create or update fear & greed chart
+          if (!fearGreedChart) {
+            createFearGreedChart();
+          }
         }
 
         // Crypto Prices
@@ -2237,17 +2470,14 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
         \`).join('') || '<div class="loading">No markets</div>';
         document.getElementById('predictions-card').innerHTML = '<h2>Prediction Markets <span class="badge">POLYMARKET</span></h2>' + predHtml;
 
-        // Narratives
-        const narrHtml = narratives.narratives?.map(n => \`
-          <div class="narrative">
-            <div class="narrative-header">
-              <span class="narrative-name">\${n.name}</span>
-              <span class="narrative-score">\${n.score}</span>
-            </div>
-            <div class="narrative-bar"><div class="narrative-bar-fill" style="width: \${n.score}%"></div></div>
-          </div>
-        \`).join('') || '';
-        document.getElementById('narratives-card').innerHTML = '<h2>Active Narratives <span class="badge">8 TRACKED</span></h2>' + narrHtml;
+        // Narratives with chart
+        if (narratives.narratives) {
+          document.getElementById('narratives-card').innerHTML = \`
+            <h2>Active Narratives <span class="badge">8 TRACKED</span></h2>
+            <div class="chart-container" style="height: 280px;"><canvas id="narrativesChart"></canvas></div>
+          \`;
+          createNarrativesChart(narratives.narratives);
+        }
 
         // Drivers
         const driversHtml = risk.drivers?.length > 0
