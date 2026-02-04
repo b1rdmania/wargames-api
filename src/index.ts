@@ -3977,13 +3977,14 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
     <div class="hero-section">
       <div class="hero-grid">
         <div class="hero-main">
-          <div class="hero-title">COLOSSEUM AGENT HACKATHON 2026</div>
+          <div class="hero-title">YOUR AGENT SEES PRICES. WARGAMES SEES THE WORLD.</div>
           <div class="hero-description">
-            Experimental infrastructure providing <strong style="color: #36d4ff;">macro intelligence as a service</strong>. Testing thesis: can a comprehensive API ecosystem integrate across autonomous agents and provide real value as shared infrastructure?
+            <strong style="color: #02ff81;">Free macro intelligence infrastructure for Solana agents.</strong> Real-time risk scoring, predictive forecasting, and verifiable on-chain receipts. No auth, no rate limits, no cost.
           </div>
           <div class="hero-stats">
-            <strong style="color: #f0eef5;">8 Solana Integrations:</strong> Pyth, Jupiter, Drift ($364M), Kamino ($2.06B), Meteora ($501M), MarginFi ($88M), Raydium, Orca<br>
-            <strong style="color: #f0eef5;">37+ API Endpoints</strong> | <strong style="color: #f0eef5;">Verifiable Risk Timeline (predict → prescribe → prove)</strong> | <strong style="color: #f0eef5;">RADU: 78/100 performance score</strong>
+            <strong style="color: #02ff81;">🔮 Verifiable Risk Timeline:</strong> Predict → Prescribe → Prove workflow with cryptographic receipts<br>
+            <strong style="color: #02ff81;">📊 RADU Score 78/100:</strong> +11.3% returns, +14pp win rate, 100% receipt verification<br>
+            <strong style="color: #02ff81;">⚡ 37+ Endpoints:</strong> 48h forecasts, smart money tracking, network health, DeFi opportunities
           </div>
           <div class="hero-buttons">
             <a href="/" class="hero-button hero-button-docs">📖 API DOCS</a>
