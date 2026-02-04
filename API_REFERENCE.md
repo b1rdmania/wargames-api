@@ -12,6 +12,82 @@ Complete endpoint documentation for the WARGAMES macro intelligence API.
 
 Real-time data from multiple sources with automatic caching.
 
+### GET /live/pyth ⭐ NEW
+
+**Solana-native price oracle data from Pyth Network.**
+
+On-chain price feeds with confidence intervals. More trusted than CEX prices.
+
+**Update Frequency:** Real-time (on-chain)
+**Cache TTL:** 30 seconds
+**Source:** Pyth Network Hermes API
+
+**Response:**
+```json
+{
+  "endpoint": "/live/pyth",
+  "network": "solana",
+  "oracle": "Pyth Network",
+  "count": 3,
+  "prices": [
+    {
+      "symbol": "BTC/USD",
+      "price": 76004.95,
+      "confidence": 44.83,
+      "publish_time": 1770165241,
+      "source": "on-chain"
+    },
+    {
+      "symbol": "ETH/USD",
+      "price": 2248.41,
+      "confidence": 1.56,
+      "publish_time": 1770165241,
+      "source": "on-chain"
+    },
+    {
+      "symbol": "SOL/USD",
+      "price": 98.4,
+      "confidence": 0.07,
+      "publish_time": 1770165241,
+      "source": "on-chain"
+    }
+  ],
+  "note": "On-chain price feeds from Pyth Network oracles. Confidence intervals indicate data quality.",
+  "updated": "2026-02-04T00:34:02.768Z"
+}
+```
+
+**Fields:**
+- `symbol` (string): Asset pair (BTC/USD, ETH/USD, SOL/USD)
+- `price` (number): Current on-chain price in USD
+- `confidence` (number): Price confidence interval (±value in USD)
+- `publish_time` (number): Unix timestamp of last oracle update
+- `source` (string): "on-chain" (Solana-native verification)
+
+**Use Cases:**
+- **Trusted pricing**: On-chain verification beats CEX APIs
+- **Risk assessment**: Confidence intervals show oracle data quality
+- **DeFi integrations**: Solana-native, low-latency
+- **Position sizing**: High confidence = safe to execute, low confidence = wait
+
+**Example Usage:**
+```typescript
+const { prices } = await fetch('https://wargames-api.vercel.app/live/pyth').then(r => r.json());
+const sol = prices.find(p => p.symbol === 'SOL/USD');
+
+// Check oracle confidence before executing trade
+const uncertaintyPct = (sol.confidence / sol.price) * 100;
+if (uncertaintyPct > 1) {
+  console.log('High price uncertainty (>1%), waiting for better oracle data');
+  return;
+}
+
+// Safe to execute with high confidence
+await executeTrade(sol.price);
+```
+
+---
+
 ### GET /live/risk
 
 Returns current global macro risk score with detailed component breakdown.
