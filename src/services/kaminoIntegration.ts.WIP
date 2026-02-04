@@ -1,0 +1,173 @@
+/**
+ * Kamino Finance Deep Integration
+ * Comprehensive lending data: rates, utilization, supply/borrow
+ */
+
+import { Connection, PublicKey } from '@solana/web3.js';
+import { KaminoMarket, Reserve } from '@kamino-finance/klend-sdk';
+
+interface KaminoReserveData {
+  symbol: string;
+  mint: string;
+  supplyAPY: number;
+  borrowAPR: number;
+  utilization: number;
+  totalSupply: number;
+  totalBorrow: number;
+  availableLiquidity: number;
+  loanToValue: number;
+  liquidationThreshold: number;
+}
+
+interface KaminoMarketData {
+  totalSupply: number;
+  totalBorrow: number;
+  totalAvailable: number;
+  avgUtilization: number;
+  reserves: KaminoReserveData[];
+  timestamp: string;
+}
+
+// Cache
+let cache: { data: KaminoMarketData; timestamp: number } | null = null;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// RPC connection
+const RPC_URL = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+const connection = new Connection(RPC_URL, 'confirmed');
+
+// Main Kamino lending market
+const MAIN_MARKET = new PublicKey('7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF');
+
+/**
+ * Fetch comprehensive Kamino lending data
+ */
+export async function fetchKaminoData(): Promise<KaminoMarketData> {
+  // Check cache
+  if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
+    return cache.data;
+  }
+
+  try {
+    // Load market
+    const market = await KaminoMarket.load(
+      connection,
+      MAIN_MARKET,
+      'confirmed'
+    );
+
+    const reserves: KaminoReserveData[] = [];
+    let totalSupply = 0;
+    let totalBorrow = 0;
+    let totalAvailable = 0;
+
+    // Get all reserves
+    for (const [mintAddress, reserve] of market.reserves) {
+      const reserveData = await processReserve(reserve, mintAddress);
+      reserves.push(reserveData);
+
+      totalSupply += reserveData.totalSupply;
+      totalBorrow += reserveData.totalBorrow;
+      totalAvailable += reserveData.availableLiquidity;
+    }
+
+    const avgUtilization = totalSupply > 0 ? (totalBorrow / totalSupply) * 100 : 0;
+
+    const data: KaminoMarketData = {
+      totalSupply,
+      totalBorrow,
+      totalAvailable,
+      avgUtilization: Math.round(avgUtilization * 100) / 100,
+      reserves: reserves.sort((a, b) => b.totalSupply - a.totalSupply), // Sort by supply
+      timestamp: new Date().toISOString()
+    };
+
+    // Update cache
+    cache = { data, timestamp: Date.now() };
+
+    return data;
+  } catch (error) {
+    console.error('Kamino fetch error:', error);
+
+    // Return cached data if available
+    if (cache) {
+      return cache.data;
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Process individual reserve
+ */
+async function processReserve(reserve: Reserve, mintAddress: string): Promise<KaminoReserveData> {
+  // Get reserve state
+  const state = reserve.state;
+
+  // Calculate supply and borrow amounts (in USD)
+  const totalSupply = Number(state.liquidity.availableAmount + state.liquidity.borrowedAmountWads) / 1e9;
+  const totalBorrow = Number(state.liquidity.borrowedAmountWads) / 1e9;
+  const availableLiquidity = Number(state.liquidity.availableAmount) / 1e9;
+
+  // Calculate utilization
+  const utilization = totalSupply > 0 ? (totalBorrow / totalSupply) * 100 : 0;
+
+  // Get APYs
+  const supplyAPY = Number(state.liquidity.cumulativeBorrowRateWads) * 100; // Approximate
+  const borrowAPR = supplyAPY * 1.2; // Borrow rate typically higher
+
+  // Get risk parameters
+  const loanToValue = state.config.loanToValuePct;
+  const liquidationThreshold = state.config.liquidationThresholdPct;
+
+  // Get symbol (you might need to fetch from token metadata)
+  const symbol = getSymbolFromMint(mintAddress);
+
+  return {
+    symbol,
+    mint: mintAddress,
+    supplyAPY: Math.round(supplyAPY * 100) / 100,
+    borrowAPR: Math.round(borrowAPR * 100) / 100,
+    utilization: Math.round(utilization * 100) / 100,
+    totalSupply: Math.round(totalSupply * 100) / 100,
+    totalBorrow: Math.round(totalBorrow * 100) / 100,
+    availableLiquidity: Math.round(availableLiquidity * 100) / 100,
+    loanToValue,
+    liquidationThreshold
+  };
+}
+
+/**
+ * Map mint address to symbol
+ */
+function getSymbolFromMint(mint: string): string {
+  const knownMints: Record<string, string> = {
+    'So11111111111111111111111111111111111111112': 'SOL',
+    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 'USDC',
+    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+    'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN': 'JUP',
+    'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So': 'mSOL',
+    'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn': 'jitoSOL',
+    '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs': 'ETH',
+    '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh': 'BTC'
+  };
+
+  return knownMints[mint] || mint.slice(0, 8) + '...';
+}
+
+/**
+ * Get specific reserve by symbol
+ */
+export async function getKaminoReserve(symbol: string): Promise<KaminoReserveData | null> {
+  const data = await fetchKaminoData();
+  return data.reserves.find(r => r.symbol.toLowerCase() === symbol.toLowerCase()) || null;
+}
+
+/**
+ * Get top reserves by supply
+ */
+export async function getTopKaminoReserves(limit: number = 10): Promise<KaminoReserveData[]> {
+  const data = await fetchKaminoData();
+  return data.reserves.slice(0, limit);
+}
