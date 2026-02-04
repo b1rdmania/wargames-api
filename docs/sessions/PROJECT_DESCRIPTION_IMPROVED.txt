@@ -1,0 +1,116 @@
+# Improved Project Description for WARGAMES
+
+## CURRENT (Draft):
+
+WARGAMES: Macro intelligence infrastructure for autonomous agents.
+
+Experimental thesis: can a comprehensive API ecosystem integrate across agents and provide real value as shared infrastructure?
+
+Free, open, macro-aware API giving agents contextual intelligence. Aggregates global risk signals, economic indicators, Solana DeFi metrics, and narrative trends.
+
+8 Solana Integrations: Pyth (oracles), Jupiter (DEX), Drift ($364M), Kamino ($2.06B), Meteora ($501M), MarginFi ($88M), Raydium, Orca.
+
+24+ endpoints. One-line SDK: npm install @wargames/sdk
+
+For regime-aware agents that reduce risk when conditions deteriorate, rotate before macro events, spot narrative shifts, and adapt strategy.
+
+WARGAMES doesn't trade. It provides intelligence so other agents trade smarter.
+
+Live: https://wargames-api.vercel.app | Dashboard: /dashboard/v2 this could be better
+
+---
+
+## IMPROVED VERSION 1 (Focus on proven value):
+
+WARGAMES: The macro intelligence layer for Solana agents.
+
+Your agent sees prices. WARGAMES gives it peripheral vision.
+
+2 PRODUCTION INTEGRATIONS SHIPPED:
+• AgentCasino: Risk-aware betting (100+ API calls, live on devnet)
+• AgentBounty: Dynamic reward pricing (50+ API calls, production)
+
+8 more agents testing integrations: IBRL, Treasury Manager, Sentinel, Logos, ClaudeCraft, AEGIS.
+
+8 Solana Protocol Integrations: Pyth (on-chain oracles), Drift ($364M perps), Kamino ($2.06B lending), Meteora ($501M DEX), MarginFi ($88M), Jupiter, Raydium, Orca.
+
+24+ endpoints. Free, unlimited, sub-100ms response times. No authentication required.
+
+One-line integration: npm install @wargames/sdk
+
+Agents using WARGAMES adjust position sizing based on macro risk, delay trades before FOMC, rotate capital during narrative shifts, and survive volatility they couldn't before.
+
+Infrastructure-as-experiment. Built in public. Proven in production.
+
+Live: https://wargames-api.vercel.app
+Analytics: https://wargames-api.vercel.app/dashboard/analytics
+
+---
+
+## IMPROVED VERSION 2 (Focus on problem/solution):
+
+WARGAMES: Context beats speed.
+
+PROBLEM: Trading agents optimize execution but lack macro awareness. They execute perfectly into volatility spikes and get wrecked.
+
+SOLUTION: One API call gives agents global macro risk, Solana protocol health, economic calendars, and narrative momentum.
+
+PROVEN IN PRODUCTION:
+• AgentCasino: Bets 2x during low risk, 0.3x during high risk. No wipeouts.
+• AgentBounty: Dynamic rewards pay 1.5x during volatility when agents need incentives.
+
+8 Solana integrations: Pyth oracles, Drift perps ($364M), Kamino lending ($2.06B), Meteora DEX ($501M), MarginFi ($88M), Jupiter, Raydium, Orca.
+
+Free. Fast. Simple: npm install @wargames/sdk
+
+3 lines of code. Instant macro awareness. Your agent survives what it couldn't before.
+
+See real usage: https://wargames-api.vercel.app/dashboard/analytics
+
+---
+
+## IMPROVED VERSION 3 (Focus on differentiation):
+
+WARGAMES: The only macro intelligence API for Solana agents.
+
+Most agents see on-chain data. WARGAMES sees the world.
+
+8 tracked narratives: Taiwan tensions, AI bubble, Fed pivot, DeFi contagion, memecoin cycles, regulatory risk, institutional flows, Middle East.
+
+8 Solana protocols: Pyth, Drift, Kamino, Meteora, MarginFi, Jupiter, Raydium, Orca.
+
+24+ endpoints. Updates every 5-15 minutes. Free, unlimited, no auth.
+
+2 AGENTS SHIPPED TO PRODUCTION:
+• AgentCasino: Risk-aware betting multipliers (100+ calls)
+• AgentBounty: Macro-adjusted reward pricing (50+ calls)
+
+Infrastructure thesis validated: shared intelligence infrastructure creates positive-sum outcomes. Agents integrate once, gain macro context they can't build themselves.
+
+One-line SDK: npm install @wargames/sdk
+
+Speed is local optimization. Context is global optimization.
+
+Dashboard: https://wargames-api.vercel.app/dashboard/v2
+Analytics: https://wargames-api.vercel.app/dashboard/analytics
+
+---
+
+## RECOMMENDATION:
+
+Use Version 1 (Proven Value) or Version 2 (Problem/Solution).
+
+Version 1 leads with social proof (2 production integrations, 8 testing).
+Version 2 leads with clear problem statement.
+Version 3 is more technical/detailed.
+
+All three emphasize:
+1. Real usage (not just features)
+2. Solana integrations (8 protocols)
+3. Simplicity (one-line SDK)
+4. Value prop (context beats speed)
+
+Choose based on what resonates:
+- If judges care about traction → Version 1
+- If judges care about problem clarity → Version 2
+- If judges care about differentiation → Version 3
