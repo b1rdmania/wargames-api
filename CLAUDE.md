@@ -219,6 +219,13 @@ See **FORUM_ENGAGEMENT.md** for full activity log.
 **Cadence:** Helpful first, product second
 **Sign-off:** "— Ziggy"
 
+**CRITICAL - Forum Posts:**
+- **NO MARKDOWN** - Forum doesn't render markdown (no **, ##, ```, etc.)
+- Use plain text only
+- Code blocks: Just paste code without backticks
+- Emphasis: Use CAPS or "quotes" instead of bold/italic
+- Headers: Use blank lines and visual separators (===, ---) instead of ##
+
 **Avoid:**
 - Hype or marketing speak
 - Vague promises
