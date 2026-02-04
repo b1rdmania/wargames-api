@@ -5227,6 +5227,137 @@ app.get('/market/regime/history', async (req: Request, res: Response) => {
 });
 
 // =============================================================================
+// MACRO ORACLE INTEGRATION - Unified Signal Stack
+// =============================================================================
+
+/**
+ * GET /macro/unified
+ * Combined WARGAMES crypto-native + Macro Oracle TradFi intelligence
+ * One endpoint, complete macro picture
+ */
+app.get('/macro/unified', async (_req: Request, res: Response) => {
+  try {
+    // Fetch WARGAMES crypto-native data
+    const wargamesRisk = await calculateDynamicRisk();
+    const fearGreedData = await fetchFearGreed();
+    const fearGreedValue = fearGreedData?.value || 50;
+
+    const currentNarratives = narratives.map(n => ({
+      id: n.id,
+      name: n.name,
+      current_score: n.current_score,
+      trend: n.trend || 'stable',
+      suggested_action: n.crypto_impact.suggested_action
+    }));
+
+    // Fetch Macro Oracle TradFi data
+    let macroOracleData: any = null;
+    try {
+      const macroResponse = await fetch('https://macro-oracle-production.up.railway.app/api/signal');
+      if (macroResponse.ok) {
+        macroOracleData = await macroResponse.json();
+      }
+    } catch (error) {
+      console.error('Macro Oracle fetch error:', error);
+    }
+
+    // Build unified response
+    const bias = wargamesRisk.score >= 70 ? 'defensive' :
+                 wargamesRisk.score >= 50 ? 'cautious' :
+                 wargamesRisk.score >= 30 ? 'neutral' : 'aggressive';
+
+    const unified = {
+      risk_score: wargamesRisk.score,
+      bias,
+      timestamp: new Date().toISOString(),
+
+      crypto_context: {
+        fear_greed: fearGreedValue,
+        fear_greed_interpretation: fearGreedValue < 20 ? 'extreme_fear' :
+                                   fearGreedValue < 40 ? 'fear' :
+                                   fearGreedValue < 60 ? 'neutral' :
+                                   fearGreedValue < 80 ? 'greed' : 'extreme_greed',
+        memecoin_sentiment: narratives.find((n: Narrative) => n.id === 'memecoin-mania')?.current_score || 0,
+        defi_health: wargamesRisk.score < 40 ? 'healthy' : wargamesRisk.score < 70 ? 'moderate' : 'stressed',
+        narratives: currentNarratives,
+        top_drivers: wargamesRisk.drivers.slice(0, 3)
+      },
+
+      tradfi_context: macroOracleData ? {
+        upcoming_events: macroOracleData.upcoming_events || [],
+        dxy: macroOracleData.dxy || null,
+        treasury_10y: macroOracleData.treasury_10y || null,
+        vix: macroOracleData.vix || null,
+        funding_rate: macroOracleData.funding_rate || null,
+        fed_funds_rate: macroOracleData.fed_funds_rate || null,
+        macro_signal: macroOracleData.signal || null
+      } : {
+        status: 'unavailable',
+        note: 'Macro Oracle data temporarily unavailable. Showing crypto-native data only.'
+      },
+
+      recommendation: generateUnifiedRecommendation(wargamesRisk, macroOracleData, fearGreedValue),
+
+      _meta: {
+        wargames_api: 'https://wargames-api.vercel.app',
+        macro_oracle_api: 'https://macro-oracle-production.up.railway.app',
+        integration_status: macroOracleData ? 'full' : 'crypto_only',
+        data_sources: macroOracleData ?
+          'WARGAMES (crypto) + Macro Oracle (TradFi)' :
+          'WARGAMES only (Macro Oracle unavailable)'
+      }
+    };
+
+    res.json(unified);
+  } catch (error) {
+    console.error('Unified macro endpoint error:', error);
+    res.status(500).json({ error: 'Failed to fetch unified macro intelligence' });
+  }
+});
+
+/**
+ * Generate unified recommendation combining crypto + TradFi context
+ */
+function generateUnifiedRecommendation(wargamesRisk: any, macroOracleData: any, fearGreed: number): string {
+  const score = wargamesRisk.score;
+
+  let rec = '';
+
+  // Base recommendation from risk score
+  if (score > 70) {
+    rec = 'HIGH RISK: ';
+    if (fearGreed < 20) {
+      rec += 'Extreme fear + elevated risk. Reduce leverage 50%, widen stops 50%, or wait for clarity. ';
+    } else {
+      rec += 'Elevated volatility expected. Reduce position sizes, avoid over-leveraging. ';
+    }
+  } else if (score < 30) {
+    rec = 'LOW RISK: ';
+    rec += 'Favorable macro environment. Consider increasing exposure if technicals align. ';
+  } else {
+    rec = 'MODERATE RISK: ';
+    rec += 'Mixed signals. Standard position sizing recommended. ';
+  }
+
+  // Add TradFi context if available
+  if (macroOracleData && macroOracleData.upcoming_events) {
+    const nearEvents = macroOracleData.upcoming_events.filter((e: any) => {
+      const eventDate = new Date(e.date);
+      const now = new Date();
+      const hoursUntil = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      return hoursUntil > 0 && hoursUntil < 48;
+    });
+
+    if (nearEvents.length > 0) {
+      const eventNames = nearEvents.map((e: any) => e.event).join(', ');
+      rec += `High-impact events within 48h: ${eventNames}. Consider reducing exposure before announcements.`;
+    }
+  }
+
+  return rec;
+}
+
+// =============================================================================
 // PROTOCOL HEALTH SCORES
 // =============================================================================
 
