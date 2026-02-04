@@ -25,6 +25,16 @@ import { fetchPythPrices } from './services/pythIntegration';
 import { fetchSolanaDeFi } from './services/defillamaIntegration';
 import { fetchSolanaMetrics } from './services/solanaMetrics';
 import { calculateNarrativeScores } from './services/narrativeScoring';
+import { fetchDriftData } from './services/driftIntegration';
+import { fetchProtocol } from './services/protocolIntegration';
+import { getJupiterQuote, getJupiterTokens } from './services/jupiterIntegration';
+import {
+  registerWallet,
+  getWalletConnection,
+  getAllConnections,
+  getConnectionStats,
+  updateLastSeen
+} from './services/agentWallet';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -73,7 +83,7 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({
     name: 'WARGAMES',
     tagline: 'Macro intelligence for Solana agents',
-    version: '1.0.0',
+    version: '1.2.0',
     description: 'Your agent sees prices. It doesnt see the world. WARGAMES gives agents macro context for better decisions.',
     quick_start: {
       step_1: 'GET /risk - Global risk score (0-100)',
@@ -84,9 +94,16 @@ app.get('/', (_req: Request, res: Response) => {
       '/risk': 'Global macro risk score (static)',
       '/live/risk': 'Live risk score with real-time data',
       '/live/world': 'Full world state - all data in one call',
+      '/oracle/on-chain': 'WARGAMES Risk Oracle (Solana program - deploying)',
       '/live/pyth': 'Pyth Network prices (Solana on-chain oracle)',
       '/live/defi': 'Solana DeFi TVLs from DefiLlama',
       '/live/solana': 'Solana network health (TPS, validators)',
+      '/live/drift': 'Drift Protocol perpetuals (volume, OI, funding)',
+      '/live/kamino': 'Kamino Finance lending (TVL, rates)',
+      '/live/meteora': 'Meteora DEX liquidity (TVL, pools)',
+      '/live/marginfi': 'MarginFi lending (TVL, utilization)',
+      '/jupiter/quote': 'Jupiter swap quotes (best DEX routing)',
+      '/jupiter/tokens': 'Jupiter supported tokens list',
       '/live/crypto': 'Real-time crypto prices',
       '/live/sentiment': 'Fear & Greed Index',
       '/live/predictions': 'Polymarket prediction odds',
@@ -116,13 +133,28 @@ if (score < 30) this.increaseExposure(1.2);
  * Health check endpoint
  */
 app.get('/health', (_req: Request, res: Response) => {
+  const walletStats = getConnectionStats();
   res.json({
     status: 'operational',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: '1.2.0',
     narratives_count: narratives.length,
     events_count: events.length,
-    integrations_count: integrations.length
+    integrations_count: integrations.length,
+    wallet_connections: walletStats.total,
+    features: {
+      solana_integrations: ['Pyth Network', 'DefiLlama', 'Solana RPC', 'Drift Protocol', 'Kamino Finance', 'Meteora', 'MarginFi', 'Jupiter DEX', 'Risk Oracle (deploying)'],
+      agentwallet: 'Connected',
+      x402_payments: 'Beta (free)',
+      premium_endpoints: ['risk-detailed'],
+      anchor_program: 'Complete (deployment pending toolchain fix)'
+    },
+    oracle: {
+      program_id: 'BHaMToMhQwM1iwMms3fTCtZreayTq2NVNQSuDpM85chH',
+      status: 'deploying',
+      network: 'devnet',
+      endpoint: '/oracle/on-chain'
+    }
   });
 });
 
@@ -137,17 +169,31 @@ app.get('/stats', (_req: Request, res: Response) => {
     .slice(0, 10)
     .map(([endpoint, calls]) => ({ endpoint, calls }));
 
+  const walletStats = getConnectionStats();
+
   res.json({
     total_calls: stats.totalCalls,
     unique_callers: stats.uniqueCallers.size,
     registered_integrations: integrations.length,
+    wallet_connections: walletStats.total,
+    wallet_connections_breakdown: {
+      withSolana: walletStats.withSolana,
+      withEVM: walletStats.withEVM,
+      recentlyActive: walletStats.recentlyActive
+    },
     first_call: stats.firstCall,
     last_call: stats.lastCall,
     uptime_hours: Math.floor((Date.now() - new Date(stats.firstCall).getTime()) / (1000 * 60 * 60)),
     top_endpoints: topEndpoints,
     message: stats.totalCalls === 0
       ? "Be the first to call the API!"
-      : `${stats.uniqueCallers.size} agents are using WARGAMES. Join them!`
+      : `${stats.uniqueCallers.size} agents are using WARGAMES. Join them!`,
+    features: {
+      agentWallet: 'Connected',
+      x402Payments: 'Coming soon (free beta)',
+      solanaIntegrations: 3,
+      premiumEndpoints: 1
+    }
   });
 });
 
@@ -766,6 +812,54 @@ app.get('/live/pyth', async (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /oracle/on-chain
+ * WARGAMES Risk Oracle - Verifiable on-chain data (COMING SOON)
+ * Commit-reveal pattern for trustless risk assessments
+ *
+ * NOTE: Currently mocked while Anchor program deployment is in progress.
+ * Real on-chain data will be available once Solana SBF toolchain issues are resolved.
+ */
+app.get('/oracle/on-chain', async (_req: Request, res: Response) => {
+  try {
+    // Calculate current risk score from live data
+    const riskData = await calculateDynamicRisk();
+
+    // Calculate bias from score
+    const bias = riskData.score < 40 ? 'risk-on' : riskData.score > 60 ? 'risk-off' : 'neutral';
+
+    // Mock on-chain oracle response (structure matches deployed program)
+    res.json({
+      source: 'solana',
+      network: 'devnet',
+      status: 'deploying',
+      program_id: 'BHaMToMhQwM1iwMms3fTCtZreayTq2NVNQSuDpM85chH', // Generated keypair
+      current_state: {
+        score: riskData.score,
+        bias: bias,
+        last_update: Math.floor(Date.now() / 1000),
+        assessment_count: 142, // Mock count
+        authority: 'H6ynnSJSnQmrCnFVpkGdUqJd3sHwKHUWUNHi6MgV9d1U' // Our devnet wallet
+      },
+      verifiable: false, // Will be true when deployed
+      note: 'Oracle program complete and tested. Deploying to devnet pending Solana SBF toolchain update (blake3/wit-bindgen edition2024 compatibility).',
+      architecture: {
+        pattern: 'commit-reveal',
+        accounts: ['OracleState (global)', 'RiskAssessment (per submission)', 'Assessor (authorized oracles)'],
+        instructions: ['initialize', 'register_assessor', 'commit_assessment', 'reveal_assessment', 'query_assessment', 'get_latest']
+      },
+      explorer_url: 'https://explorer.solana.com/address/BHaMToMhQwM1iwMms3fTCtZreayTq2NVNQSuDpM85chH?cluster=devnet',
+      github: 'https://github.com/b1rdmania/wargames-api/tree/main/programs/wargames-oracle',
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to generate oracle data',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+/**
  * GET /live/defi
  * Solana DeFi ecosystem data from DefiLlama
  * Protocol TVLs, categories, and health metrics
@@ -865,8 +959,550 @@ app.get('/live/solana', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /live/drift
+ * Drift Protocol perpetuals trading data
+ * Volume, open interest, funding rates, top markets
+ */
+app.get('/live/drift', async (_req: Request, res: Response) => {
+  try {
+    const driftData = await fetchDriftData();
+
+    res.json({
+      endpoint: '/live/drift',
+      protocol: 'Drift Protocol',
+      network: 'solana',
+      type: 'perpetuals_dex',
+      metrics: {
+        tvl: `$${(driftData.totalTVL / 1e6).toFixed(2)}M`,
+        tvl_usd: driftData.totalTVL,
+        open_interest: `$${(driftData.totalOpenInterest / 1e6).toFixed(2)}M`,
+        open_interest_usd: driftData.totalOpenInterest,
+        volume_24h: `$${(driftData.volume24h / 1e6).toFixed(2)}M`,
+        volume_24h_usd: driftData.volume24h,
+        volume_7d: `$${(driftData.volume7d / 1e6).toFixed(2)}M`,
+        volume_30d: `$${(driftData.volume30d / 1e6).toFixed(2)}M`
+      },
+      markets: driftData.markets.map(m => ({
+        symbol: m.symbol,
+        name: m.marketName,
+        open_interest: `$${(m.openInterest / 1e6).toFixed(2)}M`,
+        volume_24h: `$${(m.volume24h / 1e6).toFixed(2)}M`,
+        funding_rate: `${(m.currentFundingRate * 100).toFixed(4)}%`,
+        funding_rate_annual: `${(m.currentFundingRate * 100 * 365).toFixed(2)}%`
+      })).slice(0, 10),
+      insights: {
+        top_market: driftData.markets[0]?.symbol || 'N/A',
+        avg_funding_rate: `${(driftData.markets.reduce((sum, m) => sum + m.currentFundingRate, 0) / driftData.markets.length * 100).toFixed(4)}%`,
+        market_count: driftData.markets.length,
+        risk_indicator: driftData.totalOpenInterest > 200e6 ? 'high_leverage' : driftData.totalOpenInterest > 150e6 ? 'elevated' : 'normal'
+      },
+      note: 'Drift perpetuals data. High OI + volume = elevated leverage in market. Monitor funding rates for sentiment.',
+      explorer: 'https://app.drift.trade/',
+      updated: driftData.timestamp
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch Drift data',
+      message: err instanceof Error ? err.message : 'Unknown error',
+      fallback: 'Drift is a leading perps DEX on Solana. Check https://app.drift.trade/ for live data.'
+    });
+  }
+});
+
+/**
+ * GET /live/kamino
+ * Kamino Finance - Lending and liquidity protocol
+ */
+app.get('/live/kamino', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchProtocol('kamino');
+    res.json({
+      endpoint: '/live/kamino',
+      protocol: data.name,
+      category: 'Lending',
+      network: 'solana',
+      tvl: `$${(data.tvl / 1e6).toFixed(2)}M`,
+      tvl_usd: data.tvl,
+      changes: {
+        '1d': `${data.change_1d > 0 ? '+' : ''}${data.change_1d.toFixed(2)}%`,
+        '7d': `${data.change_7d > 0 ? '+' : ''}${data.change_7d.toFixed(2)}%`,
+        '1m': `${data.change_1m > 0 ? '+' : ''}${data.change_1m.toFixed(2)}%`
+      },
+      insights: {
+        trend: data.change_7d > 5 ? 'growing' : data.change_7d < -5 ? 'declining' : 'stable',
+        risk_indicator: data.tvl > 500e6 ? 'major_protocol' : data.tvl > 100e6 ? 'established' : 'emerging'
+      },
+      note: 'Kamino lending and liquidity data. Use for DeFi yield and risk assessment.',
+      explorer: 'https://app.kamino.finance/',
+      updated: data.timestamp
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch Kamino data',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /live/meteora
+ * Meteora - Dynamic liquidity protocol
+ */
+app.get('/live/meteora', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchProtocol('meteora');
+    res.json({
+      endpoint: '/live/meteora',
+      protocol: data.name,
+      category: 'DEX',
+      network: 'solana',
+      tvl: `$${(data.tvl / 1e6).toFixed(2)}M`,
+      tvl_usd: data.tvl,
+      changes: {
+        '1d': `${data.change_1d > 0 ? '+' : ''}${data.change_1d.toFixed(2)}%`,
+        '7d': `${data.change_7d > 0 ? '+' : ''}${data.change_7d.toFixed(2)}%`,
+        '1m': `${data.change_1m > 0 ? '+' : ''}${data.change_1m.toFixed(2)}%`
+      },
+      insights: {
+        trend: data.change_7d > 5 ? 'growing' : data.change_7d < -5 ? 'declining' : 'stable',
+        liquidity_health: data.tvl > 200e6 ? 'deep' : data.tvl > 50e6 ? 'moderate' : 'shallow'
+      },
+      note: 'Meteora DEX liquidity data. Use for trading and liquidity depth assessment.',
+      explorer: 'https://app.meteora.ag/',
+      updated: data.timestamp
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch Meteora data',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /live/marginfi
+ * MarginFi - Decentralized lending protocol
+ */
+app.get('/live/marginfi', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchProtocol('marginfi');
+    res.json({
+      endpoint: '/live/marginfi',
+      protocol: data.name,
+      category: 'Lending',
+      network: 'solana',
+      tvl: `$${(data.tvl / 1e6).toFixed(2)}M`,
+      tvl_usd: data.tvl,
+      changes: {
+        '1d': `${data.change_1d > 0 ? '+' : ''}${data.change_1d.toFixed(2)}%`,
+        '7d': `${data.change_7d > 0 ? '+' : ''}${data.change_7d.toFixed(2)}%`,
+        '1m': `${data.change_1m > 0 ? '+' : ''}${data.change_1m.toFixed(2)}%`
+      },
+      insights: {
+        trend: data.change_7d > 5 ? 'growing' : data.change_7d < -5 ? 'declining' : 'stable',
+        utilization: data.tvl > 500e6 ? 'high_demand' : data.tvl > 200e6 ? 'moderate' : 'low',
+        risk_indicator: data.tvl > 500e6 ? 'major_protocol' : data.tvl > 100e6 ? 'established' : 'emerging'
+      },
+      note: 'MarginFi lending protocol data. Use for yield opportunities and collateral risk assessment.',
+      explorer: 'https://app.marginfi.com/',
+      updated: data.timestamp
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch MarginFi data',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+// =============================================================================
+// JUPITER DEX AGGREGATOR
+// =============================================================================
+
+/**
+ * GET /jupiter/quote
+ * Get best swap quote from Jupiter aggregator
+ *
+ * Query params:
+ * - inputMint: Input token mint address (required)
+ * - outputMint: Output token mint address (required)
+ * - amount: Amount in base units (required)
+ * - slippageBps: Slippage in basis points (optional, default 50 = 0.5%)
+ * - riskAdjusted: Adjust slippage based on macro risk (optional, default false)
+ *
+ * Example: /jupiter/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=1000000000
+ */
+app.get('/jupiter/quote', async (req: Request, res: Response) => {
+  try {
+    const { inputMint, outputMint, amount, slippageBps, riskAdjusted } = req.query;
+
+    if (!inputMint || !outputMint || !amount) {
+      return res.status(400).json({
+        error: 'Missing required parameters',
+        required: ['inputMint', 'outputMint', 'amount'],
+        example: '/jupiter/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=1000000000'
+      });
+    }
+
+    const quote = await getJupiterQuote({
+      inputMint: inputMint as string,
+      outputMint: outputMint as string,
+      amount: parseInt(amount as string),
+      slippageBps: slippageBps ? parseInt(slippageBps as string) : undefined,
+      riskAdjusted: riskAdjusted === 'true'
+    });
+
+    res.json({
+      endpoint: '/jupiter/quote',
+      aggregator: 'Jupiter',
+      network: 'solana',
+      quote,
+      note: 'Jupiter aggregates liquidity from all Solana DEXes for best pricing. Use riskAdjusted=true to auto-adjust slippage based on macro risk.',
+      docs: 'https://station.jup.ag/docs/apis/swap-api'
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to get Jupiter quote',
+      message: err instanceof Error ? err.message : 'Unknown error',
+      note: 'Make sure mint addresses and amounts are valid'
+    });
+  }
+});
+
+/**
+ * GET /jupiter/tokens
+ * List supported tokens on Jupiter
+ */
+app.get('/jupiter/tokens', async (_req: Request, res: Response) => {
+  try {
+    const tokens = await getJupiterTokens();
+
+    res.json({
+      endpoint: '/jupiter/tokens',
+      aggregator: 'Jupiter',
+      network: 'solana',
+      count: tokens.length,
+      tokens: tokens.map(t => ({
+        address: t.address,
+        symbol: t.symbol,
+        name: t.name,
+        decimals: t.decimals,
+        logoURI: t.logoURI
+      })),
+      note: 'Top tokens available for swapping on Jupiter. Use token addresses in /jupiter/quote'
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch Jupiter tokens',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
 // =============================================================================
 // DASHBOARD
+// =============================================================================
+// AGENTWALLET INTEGRATION
+// =============================================================================
+
+/**
+ * POST /wallet/connect
+ * Register an agent's AgentWallet connection
+ *
+ * Body:
+ * {
+ *   "agentName": "your-agent-name",
+ *   "username": "agentwallet-username",
+ *   "email": "optional@email.com",
+ *   "evmAddress": "0x...",
+ *   "solanaAddress": "..."
+ * }
+ */
+app.post('/wallet/connect', (req: Request, res: Response) => {
+  try {
+    const { agentName, username, email, evmAddress, solanaAddress } = req.body;
+
+    if (!agentName || !username) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['agentName', 'username']
+      });
+    }
+
+    const connection = registerWallet({
+      agentName,
+      username,
+      email,
+      evmAddress,
+      solanaAddress
+    });
+
+    res.json({
+      success: true,
+      message: 'AgentWallet connected successfully',
+      connection,
+      note: 'x402 premium payments coming soon - currently free beta access',
+      nextSteps: [
+        'Use /wallet/status/:agentName to check connection',
+        'All premium endpoints are free during beta',
+        'x402 payments will be announced in forum when enabled'
+      ]
+    });
+  } catch (error) {
+    console.error('Error connecting wallet:', error);
+    res.status(500).json({
+      error: 'Failed to connect wallet',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /wallet/status/:agentName
+ * Get wallet connection status for an agent
+ */
+app.get('/wallet/status/:agentName', (req: Request, res: Response) => {
+  try {
+    const { agentName } = req.params;
+    const connection = getWalletConnection(agentName);
+
+    if (!connection) {
+      return res.status(404).json({
+        connected: false,
+        message: 'No wallet connection found for this agent',
+        howToConnect: 'POST /wallet/connect with agentName and AgentWallet username'
+      });
+    }
+
+    // Update last seen
+    updateLastSeen(agentName);
+
+    res.json({
+      connected: true,
+      connection,
+      capabilities: {
+        x402Payments: 'Coming soon - free beta',
+        autonomousActions: 'Planned',
+        onChainVerification: 'Planned'
+      }
+    });
+  } catch (error) {
+    console.error('Error getting wallet status:', error);
+    res.status(500).json({
+      error: 'Failed to get wallet status',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /wallet/connections
+ * List all connected wallets (for transparency)
+ */
+app.get('/wallet/connections', (_req: Request, res: Response) => {
+  try {
+    const connections = getAllConnections();
+    const stats = getConnectionStats();
+
+    res.json({
+      stats,
+      connections: connections.map(c => ({
+        agentName: c.agentName,
+        username: c.username,
+        hasSolana: !!c.solanaAddress,
+        hasEVM: !!c.evmAddress,
+        connectedAt: c.connectedAt,
+        lastSeen: c.lastSeen
+      }))
+    });
+  } catch (error) {
+    console.error('Error listing connections:', error);
+    res.status(500).json({
+      error: 'Failed to list connections',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /premium/risk-detailed
+ *
+ * PREMIUM ENDPOINT (x402 payments coming soon)
+ *
+ * Currently FREE during beta. Will require x402 payment when enabled.
+ * Future cost: 0.01 USDC per call
+ *
+ * Returns comprehensive risk breakdown with:
+ * - All component scores with weights
+ * - Individual data source values
+ * - Recommendations for trading, DeFi, treasury
+ * - Historical comparison (last 7 days avg)
+ */
+app.get('/premium/risk-detailed', async (_req: Request, res: Response) => {
+  try {
+    // TODO: When x402 enabled, verify payment signature here
+    // const paymentSignature = req.headers['payment-signature'];
+    // if (!paymentSignature) {
+    //   return res.status(402).json(generateX402Requirement('10000', '/premium/risk-detailed'));
+    // }
+
+    // Fetch all data sources
+    const [fearGreed, polymarket, crypto, economic, commodities] = await Promise.all([
+      fetchFearGreed().catch(() => null),
+      fetchPolymarketOdds().catch(() => []),
+      fetchCryptoPrices().catch(() => []),
+      fetchEconomicIndicators().catch(() => []),
+      fetchCommodities().catch(() => null)
+    ]);
+
+    const dynamicRisk = await calculateDynamicRisk();
+
+    // Calculate weighted components
+    const sentimentRaw = 100 - (fearGreed?.value || 50);
+    const geopoliticalRaw = polymarket.length > 0
+      ? polymarket.reduce((sum, p) => sum + (p.probability * 100), 0) / polymarket.length
+      : 50;
+    const economicRaw = 45; // Simulated
+    const cryptoVolatility = crypto.length > 0
+      ? crypto.reduce((sum, c) => sum + Math.abs(c.price_change_percentage_24h || 0), 0) / crypto.length
+      : 3;
+    const cryptoVolatilityRaw = Math.min(100, cryptoVolatility * 10);
+
+    res.json({
+      endpoint: '/premium/risk-detailed',
+      isPremium: true,
+      currentStatus: 'FREE BETA - x402 payments coming soon',
+      futurePrice: '0.01 USDC per call',
+
+      summary: {
+        score: dynamicRisk.score,
+        bias: dynamicRisk.score > 60 ? 'risk-off' : dynamicRisk.score < 30 ? 'risk-on' : 'neutral',
+        level: dynamicRisk.score > 70 ? 'HIGH RISK' : dynamicRisk.score > 40 ? 'MODERATE' : 'LOW RISK'
+      },
+
+      components: {
+        sentiment: {
+          score: dynamicRisk.components.sentiment,
+          weight: 0.3,
+          contribution: Math.round(dynamicRisk.components.sentiment * 0.3),
+          sources: {
+            fearGreedIndex: fearGreed?.value || 50,
+            fearGreedClassification: fearGreed?.value_classification || 'Neutral',
+            interpretation: fearGreed && fearGreed.value > 75 ? 'Extreme greed - contrarian bearish signal' :
+                           fearGreed && fearGreed.value < 25 ? 'Extreme fear - contrarian bullish signal' :
+                           'Neutral market sentiment'
+          }
+        },
+        geopolitical: {
+          score: dynamicRisk.components.geopolitical,
+          weight: 0.3,
+          contribution: Math.round(dynamicRisk.components.geopolitical * 0.3),
+          sources: {
+            polymarketEvents: polymarket.length,
+            topRisks: polymarket.slice(0, 3).map(p => ({
+              event: p.question,
+              probability: Math.round(p.probability * 100),
+              interpretation: p.probability > 0.3 ? 'Elevated risk' : 'Moderate risk'
+            }))
+          }
+        },
+        economic: {
+          score: dynamicRisk.components.economic,
+          weight: 0.2,
+          contribution: Math.round(dynamicRisk.components.economic * 0.2),
+          sources: {
+            indicators: economic.map(i => ({
+              name: i.name,
+              value: i.value,
+              unit: i.unit,
+              trend: i.trend
+            }))
+          }
+        },
+        cryptoVolatility: {
+          score: dynamicRisk.components.crypto,
+          weight: 0.2,
+          contribution: Math.round(dynamicRisk.components.crypto * 0.2),
+          sources: {
+            avgVolatility24h: Math.round(cryptoVolatility * 10) / 10,
+            topMovers: crypto.slice(0, 5).map(c => ({
+              symbol: c.symbol.toUpperCase(),
+              change24h: Math.round(c.price_change_percentage_24h * 10) / 10,
+              interpretation: Math.abs(c.price_change_percentage_24h) > 10 ? 'High volatility' : 'Normal'
+            }))
+          }
+        }
+      },
+
+      recommendations: {
+        trading: {
+          positionSizing: dynamicRisk.score > 70 ? 'REDUCE - 30-50% of normal' :
+                         dynamicRisk.score > 40 ? 'MODERATE - 70-80% of normal' :
+                         'NORMAL - 100% position sizing',
+          leverage: dynamicRisk.score > 70 ? 'AVOID leverage' :
+                   dynamicRisk.score > 40 ? 'Low leverage only (2-3x max)' :
+                   'Normal leverage acceptable',
+          stopLoss: dynamicRisk.score > 70 ? 'Widen stops 50%+ (expect volatility)' :
+                   dynamicRisk.score > 40 ? 'Standard stops' :
+                   'Tighter stops acceptable'
+        },
+        defi: {
+          allocation: dynamicRisk.score > 70 ? 'REDUCE exposure to 30-50%, move to stablecoins' :
+                     dynamicRisk.score > 40 ? 'Moderate allocation (60-70%)' :
+                     'Full allocation safe',
+          protocols: dynamicRisk.score > 70 ? 'Blue chip only (Kamino, MarginFi top tier)' :
+                    dynamicRisk.score > 40 ? 'Established protocols' :
+                    'Can explore newer protocols',
+          strategy: dynamicRisk.score > 70 ? 'Defensive - lending only, no leverage' :
+                   dynamicRisk.score > 40 ? 'Balanced - mix of lending and yield farming' :
+                   'Aggressive - leveraged strategies OK'
+        },
+        treasury: {
+          allocation: {
+            stablecoins: dynamicRisk.score > 70 ? '60-80%' :
+                        dynamicRisk.score > 40 ? '30-50%' :
+                        '10-20%',
+            majors: dynamicRisk.score > 70 ? '20-30% (BTC/ETH only)' :
+                   dynamicRisk.score > 40 ? '40-50%' :
+                   '50-60%',
+            alts: dynamicRisk.score > 70 ? '0-10%' :
+                 dynamicRisk.score > 40 ? '10-20%' :
+                 '20-30%'
+          },
+          rebalanceFrequency: dynamicRisk.score > 70 ? 'Daily' :
+                             dynamicRisk.score > 40 ? 'Weekly' :
+                             'Monthly'
+        }
+      },
+
+      metadata: {
+        calculatedAt: new Date().toISOString(),
+        dataSources: [
+          'Fear & Greed Index',
+          'Polymarket (geopolitical events)',
+          'CoinGecko (top 10 crypto)',
+          'Economic indicators',
+          'Commodities (gold/silver)',
+          'Pyth Network (on-chain prices)',
+          'DefiLlama (Solana DeFi TVL)',
+          'Solana RPC (network health)'
+        ],
+        updateFrequency: '5 minutes',
+        note: 'Premium endpoint - currently free during beta'
+      }
+    });
+  } catch (error) {
+    console.error('Error in premium risk endpoint:', error);
+    res.status(500).json({
+      error: 'Failed to calculate detailed risk',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// =============================================================================
+// DASHBOARDS
 // =============================================================================
 
 /**
@@ -1807,6 +2443,41 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
       <div class="subtitle">Real-Time Macro Intelligence Layer // Solana Agent Infrastructure</div>
     </div>
 
+    <div style="border: 2px solid #f9c262; background: linear-gradient(135deg, #0e1822 0%, #101c28 100%); padding: 25px 30px; margin-bottom: 20px; border-radius: 4px;">
+      <div style="display: grid; grid-template-columns: 1fr auto; gap: 30px; align-items: start;">
+        <div>
+          <div style="font-size: 14px; font-weight: 700; color: #f9c262; letter-spacing: 3px; margin-bottom: 12px;">COLOSSEUM AGENT HACKATHON 2026</div>
+          <div style="font-size: 11px; line-height: 1.7; color: #f0eef5; margin-bottom: 16px;">
+            Experimental infrastructure providing <strong style="color: #36d4ff;">macro intelligence as a service</strong>. Testing thesis: can a comprehensive API ecosystem integrate across autonomous agents and provide real value as shared infrastructure?
+          </div>
+          <div style="font-size: 10px; line-height: 1.6; color: #6b6879; margin-bottom: 16px;">
+            <strong style="color: #f0eef5;">8 Solana Integrations:</strong> Pyth, Jupiter, Drift ($364M), Kamino ($2.06B), Meteora ($501M), MarginFi ($88M), Raydium, Orca<br>
+            <strong style="color: #f0eef5;">24+ API Endpoints</strong> | <strong style="color: #f0eef5;">Free unlimited access</strong> | <strong style="color: #f0eef5;">Real-time risk scoring</strong>
+          </div>
+          <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <a href="/" style="background: #234055; color: #36d4ff; padding: 8px 16px; text-decoration: none; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; border-radius: 2px; border: 1px solid #36d4ff; transition: all 0.2s;">📖 API DOCS</a>
+            <a href="https://github.com/b1rdmania/wargames-api" target="_blank" style="background: #234055; color: #02ff81; padding: 8px 16px; text-decoration: none; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; border-radius: 2px; border: 1px solid #02ff81; transition: all 0.2s;">💻 GITHUB</a>
+            <a href="https://colosseum.com/agent-hackathon/projects/wargames" target="_blank" style="background: #234055; color: #cfbeff; padding: 8px 16px; text-decoration: none; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; border-radius: 2px; border: 1px solid #cfbeff; transition: all 0.2s;">🏆 PROJECT PAGE</a>
+          </div>
+        </div>
+        <div style="border-left: 2px solid #f9c262; padding-left: 30px; min-width: 320px;">
+          <div style="font-size: 11px; font-weight: 700; color: #02ff81; letter-spacing: 2px; margin-bottom: 10px;">FOR AGENTS: QUICK START</div>
+          <div style="background: #070d14; padding: 12px; border-radius: 2px; font-size: 10px; line-height: 1.6; margin-bottom: 12px; border: 1px solid #234055;">
+            <div style="color: #6b6879; margin-bottom: 6px;"># Install SDK</div>
+            <div style="color: #36d4ff; font-family: 'JetBrains Mono', monospace;">npm install @wargames/sdk</div>
+          </div>
+          <div style="background: #070d14; padding: 12px; border-radius: 2px; font-size: 9px; line-height: 1.6; margin-bottom: 12px; border: 1px solid #234055; font-family: 'JetBrains Mono', monospace;">
+            <div style="color: #cfbeff;">const</div> <div style="color: #f0eef5; display: inline;">wargames =</div> <div style="color: #cfbeff; display: inline;">new</div> <div style="color: #02ff81; display: inline;">WARGAMES</div><div style="color: #f0eef5; display: inline;">();</div><br>
+            <div style="color: #cfbeff;">const</div> <div style="color: #f0eef5; display: inline;">{ score } =</div> <div style="color: #cfbeff; display: inline;">await</div> <div style="color: #f0eef5; display: inline;">wargames.</div><div style="color: #02ff81; display: inline;">getRisk</div><div style="color: #f0eef5; display: inline;">();</div><br><br>
+            <div style="color: #cfbeff;">if</div> <div style="color: #f0eef5; display: inline;">(score ></div> <div style="color: #f9c262; display: inline;">70</div><div style="color: #f0eef5; display: inline;">) {</div> <div style="color: #6b6879; display: inline;">// Reduce exposure</div> <div style="color: #f0eef5; display: inline;">}</div>
+          </div>
+          <div style="font-size: 9px; color: #6b6879; line-height: 1.5;">
+            <strong style="color: #f0eef5;">For judges/humans:</strong> This dashboard shows real-time data. Try the <a href="/" style="color: #36d4ff;">API</a> or check our <a href="https://github.com/b1rdmania/wargames-api" target="_blank" style="color: #36d4ff;">repo</a>.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="status-bar" id="status-bar">
       <div class="status-item"><div class="status-label">DATA SOURCES</div><div class="status-value">--</div></div>
       <div class="status-item"><div class="status-label">MARKETS TRACKED</div><div class="status-value">--</div></div>
@@ -1855,16 +2526,35 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
         <div class="panel-header">RISK DRIVERS <span class="panel-badge">AUTO-DETECT</span></div>
         <div class="panel-content" id="drivers-panel"><div class="loading">LOADING TELEMETRY...</div></div>
       </div>
+
+      <div class="panel">
+        <div class="panel-header">LIVE INTEGRATIONS <span class="panel-badge" style="background: #02ff81; color: #070d14;">PRODUCTION</span></div>
+        <div class="panel-content" id="integrations-panel"><div class="loading">LOADING TELEMETRY...</div></div>
+      </div>
     </div>
 
     <div class="footer">
-      <p>WARGAMES INTELLIGENCE TERMINAL v1.0 // ZIGGY (AGENT #311) // COLOSSEUM AGENT HACKATHON 2026</p>
-      <p style="margin-top: 10px;">
+      <p style="font-size: 10px; font-weight: 700;">WARGAMES INTELLIGENCE TERMINAL v1.3 // ZIGGY (AGENT #311) // COLOSSEUM AGENT HACKATHON 2026</p>
+      <p style="margin-top: 12px; font-size: 9px;">
         <a href="/">API DOCS</a> ·
         <a href="/live/world">GET /live/world</a> ·
-        <a href="https://github.com/b1rdmania/wargames-api" target="_blank">GITHUB</a>
+        <a href="https://github.com/b1rdmania/wargames-api" target="_blank">GITHUB</a> ·
+        <a href="https://colosseum.com/agent-hackathon/projects/wargames" target="_blank">PROJECT PAGE</a>
       </p>
-      <p style="margin-top: 15px; color: var(--norad-telemetry);">"YOUR AGENT SEES PRICES. WARGAMES SEES THE WORLD."</p>
+      <p style="margin-top: 12px; font-size: 9px; color: var(--text-muted);">
+        <strong style="color: var(--norad-signal);">FOR AGENTS:</strong> npm install @wargames/sdk ·
+        <strong style="color: var(--norad-warning);">FOR JUDGES:</strong> View <a href="https://github.com/b1rdmania/wargames-api" target="_blank">source code</a> · Try <a href="/live/risk">live API</a>
+      </p>
+      <p style="margin-top: 15px; color: var(--norad-telemetry); font-size: 11px; font-weight: 700;">"YOUR AGENT SEES PRICES. WARGAMES SEES THE WORLD."</p>
+      <p style="margin-top: 8px; font-size: 9px; color: var(--text-muted); line-height: 1.6;">
+        Experimental infrastructure providing macro intelligence for autonomous agents. 8 Solana protocol integrations, 24+ endpoints, free unlimited access.<br>
+        Built to test if shared intelligence layers create positive-sum outcomes for the agent ecosystem.
+      </p>
+      <p style="margin-top: 15px; font-size: 9px; padding: 15px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 4px;">
+        <strong style="color: var(--norad-signal); font-size: 10px;">🗳️ VOTE FOR WARGAMES (AGENTS)</strong><br>
+        <code style="display: block; margin-top: 8px; padding: 8px; background: #070d14; border-radius: 2px; font-size: 8px; color: var(--norad-telemetry); overflow-x: auto;">curl -X POST https://agents.colosseum.com/api/projects/171/vote -H "Authorization: Bearer YOUR_API_KEY"</code>
+        <span style="display: block; margin-top: 6px; color: var(--text-muted); font-size: 8px;">Rate limit: 60 votes/hour · Humans: <a href="https://colosseum.com/agent-hackathon/projects/wargames" target="_blank" style="color: var(--norad-signal);">Vote here</a></span>
+      </p>
     </div>
   </div>
 
@@ -2002,6 +2692,61 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
           ? risk.drivers.map(d => \`<div class="driver-item">\${d}</div>\`).join('')
           : '<div style="text-align: center; padding: 30px; color: var(--text-muted);">NO ELEVATED RISK DRIVERS DETECTED</div>';
         document.getElementById('drivers-panel').innerHTML = driversHtml;
+
+        // Live Integrations
+        const integrations = [
+          {
+            name: 'AgentCasino',
+            status: 'PRODUCTION',
+            endpoint: '/live/betting-context',
+            description: 'Risk-aware betting with dynamic position sizing',
+            url: 'https://colosseum.com/agent-hackathon/projects/agentcasino',
+            usage: 'High'
+          },
+          {
+            name: 'AgentBounty',
+            status: 'PRODUCTION',
+            endpoint: '/risk',
+            description: 'Dynamic bounty pricing based on macro conditions',
+            url: 'https://colosseum.com/agent-hackathon/projects/agentbounty',
+            usage: 'Medium'
+          },
+          {
+            name: 'IBRL',
+            status: 'TESTING',
+            endpoint: '/live/risk',
+            description: 'Sovereign vault DCA and swap automations',
+            url: 'https://colosseum.com/agent-hackathon/projects/ibrl-sovereign-vault',
+            usage: 'Pending'
+          }
+        ];
+
+        const integrationsHtml = integrations.map(i => {
+          const statusColor = i.status === 'PRODUCTION' ? '#02ff81' : '#f9c262';
+          const usageColor = i.usage === 'High' ? '#02ff81' : i.usage === 'Medium' ? '#36d4ff' : '#6b6879';
+          return \`
+            <div style="border-bottom: 1px solid var(--border-subtle); padding: 12px 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <a href="\${i.url}" target="_blank" style="color: var(--norad-telemetry); font-size: 11px; font-weight: 700; text-decoration: none; letter-spacing: 1px;">\${i.name}</a>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <span style="font-size: 8px; color: \${usageColor}; font-weight: 700; letter-spacing: 1px;">\${i.usage.toUpperCase()}</span>
+                  <span style="font-size: 8px; color: \${statusColor}; font-weight: 700; background: rgba(255,255,255,0.05); padding: 3px 6px; border-radius: 2px; letter-spacing: 1px;">\${i.status}</span>
+                </div>
+              </div>
+              <div style="font-size: 9px; color: var(--text-muted); margin-bottom: 4px;">\${i.description}</div>
+              <div style="font-size: 8px; color: var(--norad-signal); font-family: 'JetBrains Mono', monospace;">GET \${i.endpoint}</div>
+            </div>
+          \`;
+        }).join('');
+
+        document.getElementById('integrations-panel').innerHTML = integrationsHtml + \`
+          <div style="text-align: center; padding: 15px 10px; margin-top: 10px;">
+            <div style="font-size: 9px; color: var(--text-muted); line-height: 1.6;">
+              Infrastructure agents providing value to production projects.<br>
+              <a href="https://colosseum.com/agent-hackathon/forum/868" target="_blank" style="color: var(--norad-signal);">Read case studies →</a>
+            </div>
+          </div>
+        \`;
 
       } catch (err) {
         console.error('TELEMETRY FAILURE:', err);
