@@ -21,6 +21,7 @@ import {
   fetchWorldState,
   calculateDynamicRisk
 } from './services/dataFetchers';
+import { fetchPythPrices } from './services/pythIntegration';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,6 +81,7 @@ app.get('/', (_req: Request, res: Response) => {
       '/risk': 'Global macro risk score (static)',
       '/live/risk': 'Live risk score with real-time data',
       '/live/world': 'Full world state - all data in one call',
+      '/live/pyth': 'Pyth Network prices (Solana on-chain oracle)',
       '/live/crypto': 'Real-time crypto prices',
       '/live/sentiment': 'Fear & Greed Index',
       '/live/predictions': 'Polymarket prediction odds',
@@ -675,6 +677,39 @@ app.get('/live/betting-context', async (_req: Request, res: Response) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to calculate betting context' });
+  }
+});
+
+/**
+ * GET /live/pyth
+ * Solana-native price oracle data from Pyth Network
+ * On-chain prices with confidence intervals
+ */
+app.get('/live/pyth', async (_req: Request, res: Response) => {
+  try {
+    const prices = await fetchPythPrices();
+
+    res.json({
+      endpoint: '/live/pyth',
+      network: 'solana',
+      oracle: 'Pyth Network',
+      count: prices.length,
+      prices: prices.map(p => ({
+        symbol: p.symbol,
+        price: p.price,
+        confidence: p.confidence,
+        publish_time: p.publish_time,
+        source: p.source
+      })),
+      note: 'On-chain price feeds from Pyth Network oracles. Confidence intervals indicate data quality.',
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch Pyth prices',
+      message: err instanceof Error ? err.message : 'Unknown error',
+      fallback: 'Use /live/crypto for CoinGecko prices'
+    });
   }
 });
 
