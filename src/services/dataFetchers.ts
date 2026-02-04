@@ -10,6 +10,7 @@ interface CacheEntry<T> {
   data: T;
   timestamp: number;
   ttl: number;
+  fetchedAt: string; // ISO timestamp for tracking freshness
 }
 
 const cache: Map<string, CacheEntry<any>> = new Map();
@@ -25,7 +26,27 @@ function getCached<T>(key: string): T | null {
 }
 
 function setCache<T>(key: string, data: T, ttlMs: number): void {
-  cache.set(key, { data, timestamp: Date.now(), ttl: ttlMs });
+  cache.set(key, {
+    data,
+    timestamp: Date.now(),
+    ttl: ttlMs,
+    fetchedAt: new Date().toISOString()
+  });
+}
+
+// Get data freshness info for monitoring
+export function getDataFreshness(): Record<string, { age: number; fetchedAt: string; ttl: number }> {
+  const freshness: Record<string, { age: number; fetchedAt: string; ttl: number }> = {};
+
+  for (const [key, entry] of cache.entries()) {
+    freshness[key] = {
+      age: Date.now() - entry.timestamp,
+      fetchedAt: entry.fetchedAt,
+      ttl: entry.ttl
+    };
+  }
+
+  return freshness;
 }
 
 // =============================================================================
@@ -56,7 +77,7 @@ export async function fetchFearGreed(): Promise<FearGreedData | null> {
         timestamp: new Date(parseInt(item.timestamp) * 1000).toISOString(),
         time_until_update: item.time_until_update
       };
-      setCache('fear-greed', data, 15 * 60 * 1000); // 15 min cache
+      setCache('fear-greed', data, 5 * 60 * 1000); // 5 min cache (sentiment changes fast)
       return data;
     }
   } catch (err) {
@@ -426,7 +447,7 @@ export async function fetchCommodities(): Promise<CommodityPrice[]> {
     unit: 'MMBtu'
   });
 
-  setCache('commodities', commodities, 15 * 60 * 1000); // 15 min cache
+  setCache('commodities', commodities, 10 * 60 * 1000); // 10 min cache
   return commodities;
 }
 

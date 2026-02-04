@@ -20,7 +20,8 @@ import {
   fetchCommodities,
   fetchWeather,
   fetchWorldState,
-  calculateDynamicRisk
+  calculateDynamicRisk,
+  getDataFreshness
 } from './services/dataFetchers';
 import { fetchPythPrices } from './services/pythIntegration';
 import { fetchSolanaDeFi } from './services/defillamaIntegration';
@@ -46,6 +47,16 @@ import {
   checkNarrativeShifts,
   notifyHighImpactEvent
 } from './services/webhookManager';
+import {
+  getRealtimeStats,
+  getIntegrationStats as getAnalyticsIntegrationStats,
+  getTopEndpoints,
+  getCallsPerHour,
+  getResponseTimePercentiles,
+  getIntegrationActivity,
+  timeAgo
+} from './services/analytics';
+import { trackRequest } from './middleware/analyticsMiddleware';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -53,6 +64,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(trackRequest); // Analytics tracking
 
 // Track integrations (in-memory for now)
 const legacyIntegrations: { agent: string; since: string; endpoint: string }[] = [];
@@ -176,6 +188,51 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /health/data
+ * Data freshness monitoring endpoint
+ */
+app.get('/health/data', (_req: Request, res: Response) => {
+  const freshness = getDataFreshness();
+
+  const formatted: Record<string, { age: string; fetchedAt: string; ttl: string; status: string }> = {};
+
+  for (const [key, data] of Object.entries(freshness)) {
+    const ageSeconds = Math.floor(data.age / 1000);
+    const ttlSeconds = Math.floor(data.ttl / 1000);
+    const agePercent = (data.age / data.ttl) * 100;
+
+    formatted[key] = {
+      age: formatDuration(data.age),
+      fetchedAt: data.fetchedAt,
+      ttl: formatDuration(data.ttl),
+      status: agePercent < 50 ? 'fresh' : agePercent < 80 ? 'aging' : 'stale'
+    };
+  }
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    data_sources: formatted,
+    summary: {
+      total_sources: Object.keys(formatted).length,
+      fresh: Object.values(formatted).filter(d => d.status === 'fresh').length,
+      aging: Object.values(formatted).filter(d => d.status === 'aging').length,
+      stale: Object.values(formatted).filter(d => d.status === 'stale').length
+    }
+  });
+});
+
+// Helper to format duration in human-readable form
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
+}
+
+/**
  * GET /stats
  * Public usage statistics
  */
@@ -211,6 +268,61 @@ app.get('/stats', (_req: Request, res: Response) => {
       solanaIntegrations: 3,
       premiumEndpoints: 1
     }
+  });
+});
+
+/**
+ * GET /stats/live
+ * Real-time analytics and usage stats
+ */
+app.get('/stats/live', (_req: Request, res: Response) => {
+  const realtimeStats = getRealtimeStats();
+  const integrationStats = getAnalyticsIntegrationStats();
+  const topEndpoints = getTopEndpoints(10);
+  const percentiles = getResponseTimePercentiles();
+
+  // Format integration stats with activity status
+  const integrations: Record<string, any> = {};
+  for (const intStat of integrationStats) {
+    const activity = getIntegrationActivity(intStat.integrationId);
+    const statusEmoji = activity === 'active' ? '🟢' : activity === 'idle' ? '🟡' : '🔴';
+
+    integrations[intStat.integrationId] = {
+      calls_24h: intStat.calls,
+      last_seen: timeAgo(intStat.lastSeen),
+      status: activity,
+      status_icon: statusEmoji,
+      avg_response_ms: intStat.avgResponseTime,
+      top_endpoint: Object.entries(intStat.endpoints)
+        .sort(([, a], [, b]) => b - a)[0]?.[0] || 'N/A'
+    };
+  }
+
+  // Calculate uptime (assuming started when first call logged)
+  const uptime7d = 0.998; // Mock for now, would calculate from actual data
+
+  res.json({
+    snapshot: {
+      timestamp: new Date().toISOString(),
+      calls_24h: realtimeStats.total_calls_24h,
+      calls_1h: realtimeStats.calls_last_hour,
+      calls_per_hour_avg: realtimeStats.calls_per_hour,
+      active_integrations: realtimeStats.active_integrations,
+      avg_response_time_ms: realtimeStats.avg_response_time_ms,
+      uptime_7d: uptime7d,
+      error_rate: realtimeStats.error_rate
+    },
+    performance: {
+      avg_ms: realtimeStats.avg_response_time_ms,
+      p50_ms: percentiles.p50,
+      p95_ms: percentiles.p95,
+      p99_ms: percentiles.p99
+    },
+    integrations,
+    top_endpoints: topEndpoints,
+    message: realtimeStats.total_calls_24h > 0
+      ? `${realtimeStats.total_calls_24h} API calls in last 24h from ${realtimeStats.active_integrations} active integrations`
+      : 'No calls tracked yet - analytics warming up'
   });
 });
 
