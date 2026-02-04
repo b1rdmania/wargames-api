@@ -24,7 +24,16 @@ interface WebhookSubscription {
   lastTriggered?: string;
 }
 
-type WebhookEventType = 'risk_spike' | 'risk_drop' | 'high_impact_event' | 'narrative_shift';
+type WebhookEventType =
+  | 'risk_spike'
+  | 'risk_drop'
+  | 'high_impact_event'
+  | 'narrative_shift'
+  | 'prediction_risk_spike'
+  | 'prediction_liquidation_cascade'
+  | 'prediction_speculation_peak'
+  | 'prediction_capital_outflow'
+  | 'prediction_execution_window';
 
 interface WebhookPayload {
   event: WebhookEventType;
@@ -259,7 +268,12 @@ export function getWebhookStats() {
       risk_spike: subscriptions.filter(s => s.events.includes('risk_spike')).length,
       risk_drop: subscriptions.filter(s => s.events.includes('risk_drop')).length,
       high_impact_event: subscriptions.filter(s => s.events.includes('high_impact_event')).length,
-      narrative_shift: subscriptions.filter(s => s.events.includes('narrative_shift')).length
+      narrative_shift: subscriptions.filter(s => s.events.includes('narrative_shift')).length,
+      prediction_risk_spike: subscriptions.filter(s => s.events.includes('prediction_risk_spike')).length,
+      prediction_liquidation_cascade: subscriptions.filter(s => s.events.includes('prediction_liquidation_cascade')).length,
+      prediction_speculation_peak: subscriptions.filter(s => s.events.includes('prediction_speculation_peak')).length,
+      prediction_capital_outflow: subscriptions.filter(s => s.events.includes('prediction_capital_outflow')).length,
+      prediction_execution_window: subscriptions.filter(s => s.events.includes('prediction_execution_window')).length
     },
     active_agents: new Set(subscriptions.map(s => s.agentName)).size,
     recent_triggers: subscriptions
@@ -271,4 +285,134 @@ export function getWebhookStats() {
         last_triggered: s.lastTriggered
       }))
   };
+}
+
+// =============================================================================
+// PREDICTIVE WEBHOOKS
+// =============================================================================
+
+/**
+ * Check predictions and trigger webhooks for critical events
+ */
+export async function checkPredictiveAlerts(): Promise<void> {
+  try {
+    // Import prediction functions
+    const {
+      predictRiskSpikes,
+      predictLiquidationCascades,
+      predictSpeculationPeak,
+      predictExecutionWindows
+    } = await import('./predictiveEngine');
+
+    const {
+      getCapitalFlowAnalysis
+    } = await import('./bridgeIntegration');
+
+    // Check risk spike predictions
+    const riskSpikes = await predictRiskSpikes();
+    for (const prediction of riskSpikes) {
+      // Alert if spike predicted within 2 hours AND impact is critical/high
+      if (
+        prediction.time_to_event < 2 * 60 * 60 * 1000 &&
+        (prediction.impact === 'critical' || prediction.impact === 'high')
+      ) {
+        await notifyPrediction('prediction_risk_spike', {
+          prediction_type: 'risk_spike',
+          time_to_event: prediction.time_to_event_readable,
+          predicted_value: prediction.predicted_value,
+          current_value: prediction.current_value,
+          confidence: prediction.confidence,
+          reasoning: prediction.reasoning,
+          recommended_action: prediction.recommended_action,
+          impact: prediction.impact
+        });
+      }
+    }
+
+    // Check liquidation cascade predictions
+    const cascade = await predictLiquidationCascades();
+    if (cascade && cascade.confidence > 0.7 && cascade.impact === 'critical') {
+      await notifyPrediction('prediction_liquidation_cascade', {
+        prediction_type: 'liquidation_cascade',
+        time_to_event: cascade.time_to_event_readable,
+        at_risk_usd: cascade.predicted_value,
+        confidence: cascade.confidence,
+        reasoning: cascade.reasoning,
+        recommended_action: cascade.recommended_action
+      });
+    }
+
+    // Check speculation peak predictions
+    const speculationPeak = await predictSpeculationPeak();
+    if (speculationPeak && speculationPeak.confidence > 0.75 && speculationPeak.impact === 'high') {
+      await notifyPrediction('prediction_speculation_peak', {
+        prediction_type: 'speculation_peak',
+        time_to_event: speculationPeak.time_to_event_readable,
+        predicted_score: speculationPeak.predicted_value,
+        current_score: speculationPeak.current_value,
+        confidence: speculationPeak.confidence,
+        reasoning: speculationPeak.reasoning,
+        recommended_action: speculationPeak.recommended_action
+      });
+    }
+
+    // Check capital outflow alerts
+    const capitalFlows = await getCapitalFlowAnalysis();
+    if (
+      capitalFlows.flow_direction === 'outflow' &&
+      Math.abs(capitalFlows.net_flow_24h) > 10000000 && // > $10M outflow
+      capitalFlows.confidence > 0.7
+    ) {
+      await notifyPrediction('prediction_capital_outflow', {
+        prediction_type: 'capital_outflow',
+        net_flow_24h: capitalFlows.net_flow_24h,
+        total_outflow_24h: capitalFlows.total_outflow_24h,
+        confidence: capitalFlows.confidence,
+        interpretation: capitalFlows.interpretation,
+        bridges: capitalFlows.bridges.map(b => ({
+          bridge: b.bridge,
+          outflow: b.outflow_24h,
+          net_flow: b.net_flow_24h
+        }))
+      });
+    }
+
+    // Check optimal execution windows
+    const executionWindows = await predictExecutionWindows();
+    for (const window of executionWindows) {
+      // Alert if window opening within 1 hour AND high quality
+      if (
+        window.time_to_event < 60 * 60 * 1000 &&
+        window.confidence > 0.8
+      ) {
+        await notifyPrediction('prediction_execution_window', {
+          prediction_type: 'execution_window',
+          time_to_event: window.time_to_event_readable,
+          window_quality: window.predicted_value,
+          confidence: window.confidence,
+          reasoning: window.reasoning,
+          recommended_action: window.recommended_action
+        });
+      }
+    }
+
+  } catch (error) {
+    console.error('Predictive alerts check error:', error);
+  }
+}
+
+/**
+ * Notify subscribers of prediction events
+ */
+async function notifyPrediction(
+  eventType: WebhookEventType,
+  data: any
+): Promise<void> {
+  const subscribers = subscriptions.filter(s => s.events.includes(eventType));
+
+  await Promise.all(
+    subscribers.map(sub =>
+      triggerWebhook(sub, eventType, data)
+    )
+  );
 }
