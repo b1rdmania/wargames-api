@@ -24,6 +24,7 @@ import {
 import { fetchPythPrices } from './services/pythIntegration';
 import { fetchSolanaDeFi } from './services/defillamaIntegration';
 import { fetchSolanaMetrics } from './services/solanaMetrics';
+import { calculateNarrativeScores } from './services/narrativeScoring';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -250,29 +251,56 @@ app.get('/risk/trading', (_req: Request, res: Response) => {
 
 /**
  * GET /narratives
- * All active narratives
+ * All active narratives with dynamic scores
  */
-app.get('/narratives', (_req: Request, res: Response) => {
-  const summary = narratives.map(n => ({
-    id: n.id,
-    name: n.name,
-    score: n.current_score,
-    trend: n.trend,
-    suggested_action: n.crypto_impact.suggested_action
-  }));
+app.get('/narratives', async (_req: Request, res: Response) => {
+  try {
+    // Get dynamic scores
+    const dynamicScores = await calculateNarrativeScores();
 
-  res.json({
-    count: narratives.length,
-    narratives: summary,
-    updated: new Date().toISOString()
-  });
+    // Merge dynamic scores with static narrative definitions
+    const summary = narratives.map(n => {
+      const dynamicData = dynamicScores[n.id];
+      return {
+        id: n.id,
+        name: n.name,
+        score: dynamicData?.score ?? n.current_score, // Use dynamic if available
+        trend: dynamicData?.trend ?? n.trend,
+        suggested_action: n.crypto_impact.suggested_action,
+        drivers: dynamicData?.drivers || []
+      };
+    });
+
+    res.json({
+      count: narratives.length,
+      narratives: summary,
+      note: 'Scores calculated from live market data (Fear & Greed, Polymarket, crypto prices)',
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    // Fallback to static scores if dynamic calculation fails
+    const summary = narratives.map(n => ({
+      id: n.id,
+      name: n.name,
+      score: n.current_score,
+      trend: n.trend,
+      suggested_action: n.crypto_impact.suggested_action
+    }));
+
+    res.json({
+      count: narratives.length,
+      narratives: summary,
+      note: 'Using fallback static scores (dynamic calculation unavailable)',
+      updated: new Date().toISOString()
+    });
+  }
 });
 
 /**
  * GET /narratives/:id
- * Specific narrative detail
+ * Specific narrative detail with dynamic scoring
  */
-app.get('/narratives/:id', (req: Request, res: Response) => {
+app.get('/narratives/:id', async (req: Request, res: Response) => {
   const narrative = narratives.find(n => n.id === req.params.id);
 
   if (!narrative) {
@@ -282,7 +310,27 @@ app.get('/narratives/:id', (req: Request, res: Response) => {
     });
   }
 
-  res.json(narrative);
+  try {
+    // Get dynamic score for this narrative
+    const dynamicScores = await calculateNarrativeScores();
+    const dynamicData = dynamicScores[narrative.id];
+
+    // Merge dynamic data with static definition
+    res.json({
+      ...narrative,
+      current_score: dynamicData?.score ?? narrative.current_score,
+      trend: dynamicData?.trend ?? narrative.trend,
+      score_drivers: dynamicData?.drivers || ['Using static score'],
+      last_updated: new Date().toISOString()
+    });
+  } catch (err) {
+    // Fallback to static data
+    res.json({
+      ...narrative,
+      score_drivers: ['Using static score (dynamic calculation unavailable)'],
+      last_updated: new Date().toISOString()
+    });
+  }
 });
 
 // =============================================================================
