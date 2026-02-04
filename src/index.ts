@@ -32,6 +32,31 @@ app.use(express.json());
 // Track integrations (in-memory for now)
 const integrations: { agent: string; since: string; endpoint: string }[] = [];
 
+// Simple usage tracking
+const stats = {
+  totalCalls: 0,
+  uniqueCallers: new Set<string>(),
+  endpointCalls: {} as Record<string, number>,
+  firstCall: new Date().toISOString(),
+  lastCall: new Date().toISOString()
+};
+
+// Usage tracking middleware
+app.use((req, _res, next) => {
+  stats.totalCalls++;
+  stats.lastCall = new Date().toISOString();
+
+  // Track unique callers by User-Agent + first 3 octets of IP
+  const caller = `${req.headers['user-agent']?.substring(0, 50) || 'unknown'}_${req.ip?.split('.').slice(0, 3).join('.') || 'unknown'}`;
+  stats.uniqueCallers.add(caller);
+
+  // Track endpoint usage
+  const endpoint = req.path;
+  stats.endpointCalls[endpoint] = (stats.endpointCalls[endpoint] || 0) + 1;
+
+  next();
+});
+
 // =============================================================================
 // CORE ENDPOINTS
 // =============================================================================
@@ -91,6 +116,31 @@ app.get('/health', (_req: Request, res: Response) => {
     narratives_count: narratives.length,
     events_count: events.length,
     integrations_count: integrations.length
+  });
+});
+
+/**
+ * GET /stats
+ * Public usage statistics
+ */
+app.get('/stats', (_req: Request, res: Response) => {
+  // Get top endpoints
+  const topEndpoints = Object.entries(stats.endpointCalls)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([endpoint, calls]) => ({ endpoint, calls }));
+
+  res.json({
+    total_calls: stats.totalCalls,
+    unique_callers: stats.uniqueCallers.size,
+    registered_integrations: integrations.length,
+    first_call: stats.firstCall,
+    last_call: stats.lastCall,
+    uptime_hours: Math.floor((Date.now() - new Date(stats.firstCall).getTime()) / (1000 * 60 * 60)),
+    top_endpoints: topEndpoints,
+    message: stats.totalCalls === 0
+      ? "Be the first to call the API!"
+      : `${stats.uniqueCallers.size} agents are using WARGAMES. Join them!`
   });
 });
 
