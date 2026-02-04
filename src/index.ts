@@ -22,6 +22,7 @@ import {
   calculateDynamicRisk
 } from './services/dataFetchers';
 import { fetchPythPrices } from './services/pythIntegration';
+import { fetchSolanaDeFi } from './services/defillamaIntegration';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -82,6 +83,7 @@ app.get('/', (_req: Request, res: Response) => {
       '/live/risk': 'Live risk score with real-time data',
       '/live/world': 'Full world state - all data in one call',
       '/live/pyth': 'Pyth Network prices (Solana on-chain oracle)',
+      '/live/defi': 'Solana DeFi TVLs from DefiLlama',
       '/live/crypto': 'Real-time crypto prices',
       '/live/sentiment': 'Fear & Greed Index',
       '/live/predictions': 'Polymarket prediction odds',
@@ -709,6 +711,61 @@ app.get('/live/pyth', async (_req: Request, res: Response) => {
       error: 'Failed to fetch Pyth prices',
       message: err instanceof Error ? err.message : 'Unknown error',
       fallback: 'Use /live/crypto for CoinGecko prices'
+    });
+  }
+});
+
+/**
+ * GET /live/defi
+ * Solana DeFi ecosystem data from DefiLlama
+ * Protocol TVLs, categories, and health metrics
+ */
+app.get('/live/defi', async (_req: Request, res: Response) => {
+  try {
+    const defiData = await fetchSolanaDeFi();
+
+    // Calculate category breakdown
+    const categoryBreakdown: Record<string, { count: number; total_tvl: number }> = {};
+    defiData.protocols.forEach(p => {
+      if (!categoryBreakdown[p.category]) {
+        categoryBreakdown[p.category] = { count: 0, total_tvl: 0 };
+      }
+      categoryBreakdown[p.category].count++;
+      categoryBreakdown[p.category].total_tvl += p.tvl;
+    });
+
+    // Top categories by TVL
+    const topCategories = Object.entries(categoryBreakdown)
+      .map(([category, data]) => ({
+        category,
+        protocol_count: data.count,
+        total_tvl: Math.round(data.total_tvl)
+      }))
+      .sort((a, b) => b.total_tvl - a.total_tvl);
+
+    res.json({
+      endpoint: '/live/defi',
+      chain: defiData.chain,
+      total_tvl: defiData.total_tvl,
+      total_tvl_formatted: `$${(defiData.total_tvl / 1e9).toFixed(2)}B`,
+      protocol_count: defiData.protocol_count,
+      categories: topCategories,
+      top_protocols: defiData.protocols.map(p => ({
+        name: p.name,
+        tvl: p.tvl,
+        tvl_formatted: `$${(p.tvl / 1e6).toFixed(1)}M`,
+        change_1d: p.change_1d,
+        change_7d: p.change_7d,
+        category: p.category,
+        url: p.url
+      })),
+      note: 'Solana DeFi ecosystem data. Use for protocol health monitoring and TVL-based risk assessment.',
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch DeFi data',
+      message: err instanceof Error ? err.message : 'Unknown error'
     });
   }
 });
