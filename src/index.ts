@@ -23,6 +23,7 @@ import {
 } from './services/dataFetchers';
 import { fetchPythPrices } from './services/pythIntegration';
 import { fetchSolanaDeFi } from './services/defillamaIntegration';
+import { fetchSolanaMetrics } from './services/solanaMetrics';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -84,6 +85,7 @@ app.get('/', (_req: Request, res: Response) => {
       '/live/world': 'Full world state - all data in one call',
       '/live/pyth': 'Pyth Network prices (Solana on-chain oracle)',
       '/live/defi': 'Solana DeFi TVLs from DefiLlama',
+      '/live/solana': 'Solana network health (TPS, validators)',
       '/live/crypto': 'Real-time crypto prices',
       '/live/sentiment': 'Fear & Greed Index',
       '/live/predictions': 'Polymarket prediction odds',
@@ -765,6 +767,51 @@ app.get('/live/defi', async (_req: Request, res: Response) => {
   } catch (err) {
     res.status(500).json({
       error: 'Failed to fetch DeFi data',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /live/solana
+ * Solana network health metrics
+ * TPS, validators, epoch info, network health status
+ */
+app.get('/live/solana', async (_req: Request, res: Response) => {
+  try {
+    const metrics = await fetchSolanaMetrics();
+
+    res.json({
+      endpoint: '/live/solana',
+      network: metrics.network,
+      performance: {
+        tps: metrics.tps,
+        health: metrics.health,
+        block_height: metrics.block_height
+      },
+      validators: {
+        active: metrics.validators.active,
+        delinquent: metrics.validators.delinquent,
+        total: metrics.validators.total,
+        health_pct: Math.round((metrics.validators.active / metrics.validators.total) * 100)
+      },
+      epoch: {
+        current: metrics.epoch.current,
+        slot: metrics.epoch.slot,
+        progress: `${metrics.epoch.progress}%`,
+        slots_in_epoch: metrics.epoch.slots_in_epoch
+      },
+      recommendations: {
+        execute_transactions: metrics.health === 'healthy',
+        wait_for_better_conditions: metrics.health === 'congested',
+        expected_success_rate: metrics.health === 'healthy' ? '95%' : metrics.health === 'degraded' ? '75%' : '50%'
+      },
+      note: 'Solana network health metrics. Use for transaction timing and congestion awareness.',
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch Solana metrics',
       message: err instanceof Error ? err.message : 'Unknown error'
     });
   }
