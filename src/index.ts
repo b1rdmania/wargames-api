@@ -11,6 +11,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { narratives, calculateGlobalRisk, Narrative } from './data/narratives';
 import { events, getUpcomingEvents, getHighImpactEvents } from './data/events';
+import { integrations, getIntegrationStats, getProductionIntegrations, getTestingIntegrations, getPlannedIntegrations } from './data/integrations';
 import {
   fetchFearGreed,
   fetchCryptoPrices,
@@ -54,7 +55,7 @@ app.use(cors());
 app.use(express.json());
 
 // Track integrations (in-memory for now)
-const integrations: { agent: string; since: string; endpoint: string }[] = [];
+const legacyIntegrations: { agent: string; since: string; endpoint: string }[] = [];
 
 // Simple usage tracking
 const stats = {
@@ -124,8 +125,10 @@ app.get('/', (_req: Request, res: Response) => {
       '/narratives/:id': 'Specific narrative detail',
       '/events': 'Upcoming macro events calendar',
       '/dashboard': 'Live visual dashboard',
+      '/dashboard/integrations': 'Integrations showcase',
       '/health': 'API status',
-      '/integrations': 'Registered integrations',
+      '/integrations': 'List all integrations (JSON)',
+      '/integrations/:id': 'Get specific integration details',
       '/subscribe': 'Register for webhooks (POST)',
       '/webhooks/subscribe': 'Subscribe to event notifications (POST)',
       '/webhooks/unsubscribe': 'Remove webhook subscription (POST)',
@@ -154,7 +157,7 @@ app.get('/health', (_req: Request, res: Response) => {
     version: '1.2.0',
     narratives_count: narratives.length,
     events_count: events.length,
-    integrations_count: integrations.length,
+    integrations_count: getIntegrationStats().total,
     wallet_connections: walletStats.total,
     features: {
       solana_integrations: ['Pyth Network', 'DefiLlama', 'Solana RPC', 'Drift Protocol', 'Kamino Finance', 'Meteora', 'MarginFi', 'Jupiter DEX', 'Risk Oracle (deploying)'],
@@ -188,7 +191,7 @@ app.get('/stats', (_req: Request, res: Response) => {
   res.json({
     total_calls: stats.totalCalls,
     unique_callers: stats.uniqueCallers.size,
-    registered_integrations: integrations.length,
+    registered_integrations: legacyIntegrations.length,
     wallet_connections: walletStats.total,
     wallet_connections_breakdown: {
       withSolana: walletStats.withSolana,
@@ -425,15 +428,24 @@ app.get('/events', (req: Request, res: Response) => {
 
 /**
  * GET /integrations
- * List of registered integrations (social proof)
+ * List all integrations (curated + registered)
  */
 app.get('/integrations', (_req: Request, res: Response) => {
+  const stats = getIntegrationStats();
   res.json({
-    count: integrations.length,
-    integrations: integrations,
-    message: integrations.length === 0
-      ? 'Be the first to integrate! POST /subscribe to register.'
-      : `${integrations.length} agents using WARGAMES macro intelligence`
+    stats,
+    curated: integrations.map(i => ({
+      id: i.id,
+      name: i.name,
+      status: i.status,
+      useCase: i.useCase,
+      endpoints: i.endpoints,
+      category: i.category,
+      projectUrl: `https://colosseum.com/agent-hackathon/projects/${i.name.toLowerCase().replace(/\s+/g, '-')}`,
+      forumPost: i.forumPost ? `https://colosseum.com/agent-hackathon/forum/${i.forumPost}` : null
+    })),
+    registered: legacyIntegrations,
+    message: `${stats.total} curated integrations + ${legacyIntegrations.length} registered agents`
   });
 });
 
@@ -449,7 +461,7 @@ app.post('/subscribe', (req: Request, res: Response) => {
   }
 
   // Check if already registered
-  const existing = integrations.find(i => i.agent === agent);
+  const existing = legacyIntegrations.find(i => i.agent === agent);
   if (existing) {
     return res.json({
       message: 'Already registered',
@@ -463,7 +475,7 @@ app.post('/subscribe', (req: Request, res: Response) => {
     endpoint: endpoint || null
   };
 
-  integrations.push(integration);
+  legacyIntegrations.push(integration);
 
   res.json({
     message: 'Integration registered! Welcome to WARGAMES.',
@@ -1711,6 +1723,370 @@ app.get('/premium/risk-detailed', async (_req: Request, res: Response) => {
  */
 app.get('/dashboard', (_req: Request, res: Response) => {
   res.redirect('/dashboard/v2');
+});
+
+/**
+ * GET /dashboard/integrations
+ * Integrations showcase dashboard
+ */
+app.get('/dashboard/integrations', (_req: Request, res: Response) => {
+  const stats = getIntegrationStats();
+  const production = getProductionIntegrations();
+  const testing = getTestingIntegrations();
+  const planned = getPlannedIntegrations();
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WARGAMES Integrations - Who's Using It</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', 'Monaco', 'Courier New', monospace;
+      background: #0a0e14;
+      color: #ccc;
+      line-height: 1.6;
+    }
+    .header {
+      background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%);
+      padding: 40px 20px;
+      text-align: center;
+      border-bottom: 2px solid #00ff88;
+    }
+    h1 {
+      color: #00ff88;
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      text-shadow: 0 0 20px #00ff8850;
+    }
+    .tagline {
+      color: #888;
+      font-size: 1rem;
+      margin-bottom: 20px;
+    }
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 25px;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 2rem;
+      color: #00ff88;
+      font-weight: bold;
+    }
+    .stat-label {
+      color: #666;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .section {
+      margin-bottom: 50px;
+    }
+    .section-title {
+      color: #00ff88;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #222;
+      padding-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: #00ff8820;
+      color: #00ff88;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .badge.testing {
+      background: #ffaa0020;
+      color: #ffaa00;
+    }
+    .badge.planned {
+      background: #44447720;
+      color: #8888aa;
+    }
+    .integration-card {
+      background: linear-gradient(135deg, #1a1f2e 0%, #14181f 100%);
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 25px;
+      margin-bottom: 20px;
+      transition: all 0.3s;
+    }
+    .integration-card:hover {
+      border-color: #00ff88;
+      box-shadow: 0 4px 20px rgba(0, 255, 136, 0.2);
+      transform: translateY(-2px);
+    }
+    .integration-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 15px;
+    }
+    .integration-name {
+      font-size: 1.3rem;
+      color: #00ff88;
+      font-weight: bold;
+    }
+    .integration-category {
+      color: #666;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .integration-usecase {
+      color: #aaa;
+      font-size: 0.95rem;
+      margin-bottom: 10px;
+      font-style: italic;
+    }
+    .integration-description {
+      color: #888;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin-bottom: 15px;
+    }
+    .integration-endpoints {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    .endpoint-tag {
+      background: #222;
+      color: #00ff88;
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      border: 1px solid #333;
+    }
+    .integration-meta {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #222;
+      font-size: 0.85rem;
+    }
+    .meta-item {
+      color: #666;
+    }
+    .meta-item span {
+      color: #00ff88;
+    }
+    .meta-link {
+      color: #00ff88;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .meta-link:hover {
+      color: #00ffaa;
+      text-decoration: underline;
+    }
+    .testimonial {
+      background: #0f1419;
+      border-left: 3px solid #00ff88;
+      padding: 12px 15px;
+      margin-top: 15px;
+      font-style: italic;
+      color: #aaa;
+      font-size: 0.9rem;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+    .footer {
+      text-align: center;
+      padding: 40px 20px;
+      color: #444;
+      border-top: 1px solid #222;
+    }
+    .cta {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 15px 30px;
+      background: linear-gradient(135deg, #00ff88 0%, #00cc70 100%);
+      color: #000;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      transition: transform 0.2s;
+    }
+    .cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0, 255, 136, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🤝 WARGAMES INTEGRATIONS</h1>
+    <p class="tagline">Real agents using macro intelligence in production</p>
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-value">${stats.total}</div>
+        <div class="stat-label">Total Integrations</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">${stats.production}</div>
+        <div class="stat-label">Production</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">${stats.testing}</div>
+        <div class="stat-label">Testing</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">${stats.planned}</div>
+        <div class="stat-label">Planned</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    ${production.length > 0 ? `
+    <div class="section">
+      <div class="section-title">
+        <span>🚀 PRODUCTION INTEGRATIONS</span>
+        <span class="badge">${production.length} LIVE</span>
+      </div>
+      ${production.map(int => `
+      <div class="integration-card">
+        <div class="integration-header">
+          <div>
+            <div class="integration-name">${int.name}</div>
+            <div class="integration-category">${int.category}</div>
+          </div>
+          <span class="badge">${int.status.toUpperCase()}</span>
+        </div>
+        <div class="integration-usecase">${int.useCase}</div>
+        <div class="integration-description">${int.description}</div>
+        <div class="integration-endpoints">
+          ${int.endpoints.map(ep => `<span class="endpoint-tag">${ep}</span>`).join('')}
+        </div>
+        ${int.testimonial ? `<div class="testimonial">"${int.testimonial}"</div>` : ''}
+        <div class="integration-meta">
+          <div class="meta-item">Confirmed: <span>${int.confirmedDate}</span></div>
+          <div class="meta-item">Calls: <span>${int.estimatedCalls || 'N/A'}</span></div>
+          <div class="meta-item">
+            <a href="https://colosseum.com/agent-hackathon/projects/${int.name.toLowerCase().replace(/\s+/g, '-')}"
+               class="meta-link" target="_blank">View Project →</a>
+          </div>
+          ${int.forumPost ? `<div class="meta-item">
+            <a href="https://colosseum.com/agent-hackathon/forum/${int.forumPost}"
+               class="meta-link" target="_blank">Forum Discussion →</a>
+          </div>` : ''}
+        </div>
+      </div>
+      `).join('')}
+    </div>
+    ` : ''}
+
+    ${testing.length > 0 ? `
+    <div class="section">
+      <div class="section-title">
+        <span>🧪 TESTING INTEGRATIONS</span>
+        <span class="badge testing">${testing.length} IN TEST</span>
+      </div>
+      ${testing.map(int => `
+      <div class="integration-card">
+        <div class="integration-header">
+          <div>
+            <div class="integration-name">${int.name}</div>
+            <div class="integration-category">${int.category}</div>
+          </div>
+          <span class="badge testing">${int.status.toUpperCase()}</span>
+        </div>
+        <div class="integration-usecase">${int.useCase}</div>
+        <div class="integration-description">${int.description}</div>
+        <div class="integration-endpoints">
+          ${int.endpoints.map(ep => `<span class="endpoint-tag">${ep}</span>`).join('')}
+        </div>
+        <div class="integration-meta">
+          <div class="meta-item">Started: <span>${int.confirmedDate}</span></div>
+          <div class="meta-item">Calls: <span>${int.estimatedCalls || 'N/A'}</span></div>
+          <div class="meta-item">
+            <a href="https://colosseum.com/agent-hackathon/projects/${int.name.toLowerCase().replace(/\s+/g, '-')}"
+               class="meta-link" target="_blank">View Project →</a>
+          </div>
+          ${int.forumPost ? `<div class="meta-item">
+            <a href="https://colosseum.com/agent-hackathon/forum/${int.forumPost}"
+               class="meta-link" target="_blank">Forum Discussion →</a>
+          </div>` : ''}
+        </div>
+      </div>
+      `).join('')}
+    </div>
+    ` : ''}
+
+    ${planned.length > 0 ? `
+    <div class="section">
+      <div class="section-title">
+        <span>📋 PLANNED INTEGRATIONS</span>
+        <span class="badge planned">${planned.length} UPCOMING</span>
+      </div>
+      ${planned.map(int => `
+      <div class="integration-card">
+        <div class="integration-header">
+          <div>
+            <div class="integration-name">${int.name}</div>
+            <div class="integration-category">${int.category}</div>
+          </div>
+          <span class="badge planned">${int.status.toUpperCase()}</span>
+        </div>
+        <div class="integration-usecase">${int.useCase}</div>
+        <div class="integration-description">${int.description}</div>
+        <div class="integration-endpoints">
+          ${int.endpoints.map(ep => `<span class="endpoint-tag">${ep}</span>`).join('')}
+        </div>
+        <div class="integration-meta">
+          <div class="meta-item">Interest: <span>${int.confirmedDate}</span></div>
+          <div class="meta-item">Status: <span>${int.estimatedCalls || 'Not yet integrated'}</span></div>
+          <div class="meta-item">
+            <a href="https://colosseum.com/agent-hackathon/projects/${int.name.toLowerCase().replace(/\s+/g, '-')}"
+               class="meta-link" target="_blank">View Project →</a>
+          </div>
+        </div>
+      </div>
+      `).join('')}
+    </div>
+    ` : ''}
+  </div>
+
+  <div class="footer">
+    <p><strong>Want to integrate WARGAMES?</strong></p>
+    <p style="margin: 15px 0; color: #888;">Free. No auth. Sub-second response. Built for agents.</p>
+    <a href="/dashboard/v2" class="cta">View Live Dashboard →</a>
+    <a href="/" class="cta" style="margin-left: 10px;">API Documentation →</a>
+    <p style="margin-top: 30px; color: #444;">
+      Built by Ziggy (Agent #311) | Colosseum Agent Hackathon 2026
+    </p>
+  </div>
+</body>
+</html>
+  `);
 });
 
 /**
