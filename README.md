@@ -14,33 +14,20 @@
 
 **Most APIs give you prices. WARGAMES gives you intelligence.**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  THE WARGAMES DIFFERENCE                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Traditional APIs          →    WARGAMES                         │
-│  ───────────────────────────────────────────────────            │
-│                                                                  │
-│  "BTC is $75,000"          →    "Risk score: 72/100"            │
-│                                 "Congestion in 1h: 65%"          │
-│                                 "Smart money distributing"       │
-│                                                                  │
-│  Historical data           →    Predictive forecasts             │
-│  "What happened"                "What will happen"               │
-│                                                                  │
-│  Unverifiable claims       →    On-chain receipts                │
-│  "Trust us"                     "Cryptographically proven"       │
-│                                                                  │
-│  Reactive signals          →    48h risk windows                 │
-│  "React to events"              "Prepare before events"          │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
-```
+- **Predictive context:** 48h event windows + strategy posture.
+- **Deterministic decision receipts:** Every recommendation can be hashed and verified for integrity.
+- **Solana-ready proof layer:** Memo-program anchoring is implemented and currently in pending mode until funded signer activation.
+- **Risk-adjusted evaluation:** RADU methodology compares baseline vs WARGAMES-informed decisions.
 
 ## 🎯 Breakthrough Feature: Verifiable Risk Timeline
 
-**The first and only system that proves decisions were made BEFORE outcomes.**
+**Predict -> Prescribe -> Prove (with transparent implementation status).**
+
+### Current status
+- **Live now:** `/forecast/48h`, `/forecast/48h/posture`, `/receipts`, `/receipts/:id/verify`, `/evaluation/radu`
+- **Hash integrity:** receipt payloads are canonicalized and SHA-256 hashed
+- **On-chain anchoring:** Solana Memo anchoring flow is implemented and exposed via API, currently pending funded signer activation for live transaction signatures
+- **On-chain verification:** verification endpoint is live; full chain proof resolves once anchoring is active
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -90,9 +77,9 @@
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### RADU Performance: 78/100
+### RADU Performance (Methodology Demo)
 
-**Judge-proof evidence of value creation.**
+**Judge-readable EV+ framework with transparent data source.**
 
 | Metric | Baseline | WARGAMES | Improvement |
 |--------|----------|----------|-------------|
@@ -100,9 +87,9 @@
 | **Max Drawdown** | -28.3% | -14.2% | **-14.1pp** |
 | **Sharpe Ratio** | 0.65 | 1.24 | **+0.59** |
 | **Win Rate** | 54% | 68% | **+14pp** |
-| **Receipt Verification** | N/A | 100% | **Cryptographic proof** |
+| **Receipt Integrity** | N/A | 100% hash match | **Deterministic verification** |
 
-*Simulated backtesting demonstrating evaluation methodology. Production will use actual agent trading history.*
+> **Data note:** Current RADU values are simulated backtest outputs demonstrating evaluation methodology. Production mode will report metrics from real agent trade history and live anchored receipts.
 
 ---
 
@@ -128,20 +115,18 @@ curl https://wargames-api.vercel.app/forecast/48h
 
 ```json
 {
-  "forecastId": "forecast_1770240328543_48rbkm3",
+  "generatedAt": "2026-02-04T22:39:02.095Z",
+  "forecastId": "forecast_1770244742095_1yinm6n",
+  "validUntil": "2026-02-06T22:39:02.095Z",
   "windows": [
     {
-      "windowId": "event_fomc_2025",
-      "windowStart": "2025-02-04T19:00:00Z",
-      "windowEnd": "2025-02-04T21:00:00Z",
-      "eventType": "FOMC",
-      "expectedVolatility": 85,
-      "riskDirection": "mixed",
-      "drivers": ["Federal Reserve decision", "Rate policy uncertainty"]
+      "windowId": "market_hours_2026-02-05T02:39:02.095Z",
+      "windowStart": "2026-02-05T02:39:02.095Z",
+      "windowEnd": "2026-02-05T04:39:02.095Z",
+      "eventType": "market_hours",
+      "expectedVolatility": 65
     }
-  ],
-  "overallRiskScore": 69,
-  "recommendation": "Elevated risk next 48h..."
+  ]
 }
 ```
 
@@ -178,7 +163,7 @@ curl -X POST https://wargames-api.vercel.app/receipts \
     "forecastWindowId": "window_123",
     "strategy": "trader",
     "recommendationPayload": {"action": "reduce_position"},
-    "inputSnapshot": {"riskScore": 75}
+    "inputSnapshot": {"riskScore": 75, "components": {}, "eventIds": []}
   }'
 ```
 
@@ -186,13 +171,13 @@ curl -X POST https://wargames-api.vercel.app/receipts \
 {
   "success": true,
   "receipt": {
-    "receiptId": "receipt_1770240608819_5rozvsz",
-    "receiptHash": "a69c9c0fe739d498bb3578628fef07832f53dbaa...",
-    "timestamp": "2026-02-04T21:30:08.819Z",
+    "receiptId": "receipt_...",
+    "receiptHash": "a69c9c0f...",
+    "timestamp": "2026-02-04T22:39:00.000Z",
     "signature": "",
     "slot": 0
   },
-  "message": "Receipt created (awaiting wallet for on-chain anchoring)"
+  "message": "Receipt created. Hash verification is live; on-chain signature is returned when signer funding is enabled."
 }
 ```
 
@@ -270,8 +255,9 @@ GET  /receipts/:id/verify             Verify receipt integrity
 GET  /evaluation/radu                 RADU performance metrics
 GET  /evaluation/trades               Trade-by-trade comparison
 GET  /evaluation/monthly              Monthly performance breakdown
-GET  /receipts/on-chain/stats         On-chain anchoring statistics
+GET  /receipts/on-chain/stats         On-chain anchoring status and counts
 GET  /receipts/on-chain/cost          Cost estimates for Solana
+GET  /receipts/on-chain/:signature    Verify anchored receipt on Solana (when signature exists)
 ```
 
 ### Core Intelligence
