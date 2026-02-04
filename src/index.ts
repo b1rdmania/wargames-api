@@ -3956,3 +3956,63 @@ app.listen(PORT, () => {
 });
 
 export default app;
+
+// =============================================================================
+// PREDICTIVE INTELLIGENCE (THE MAGIC SAUCE)
+// =============================================================================
+
+app.get('/predict', async (_req: Request, res: Response) => {
+  try {
+    const { getPredictiveAnalysis } = await import('./services/predictiveEngine');
+    const analysis = await getPredictiveAnalysis();
+    res.json(analysis);
+  } catch (error) {
+    console.error('Prediction error:', error);
+    res.status(500).json({ error: 'Failed to generate predictions' });
+  }
+});
+
+app.get('/predict/risk-spikes', async (_req: Request, res: Response) => {
+  try {
+    const { predictRiskSpikes } = await import('./services/predictiveEngine');
+    const predictions = await predictRiskSpikes();
+    res.json({ predictions, count: predictions.length });
+  } catch (error) {
+    console.error('Risk spike prediction error:', error);
+    res.status(500).json({ error: 'Failed to predict risk spikes' });
+  }
+});
+
+app.get('/predict/liquidations', async (_req: Request, res: Response) => {
+  try {
+    const { predictLiquidationCascades } = await import('./services/predictiveEngine');
+    const prediction = await predictLiquidationCascades();
+    res.json(prediction || { message: 'No cascade risk detected' });
+  } catch (error) {
+    console.error('Liquidation prediction error:', error);
+    res.status(500).json({ error: 'Failed to predict liquidations' });
+  }
+});
+
+app.get('/predict/speculation-peak', async (_req: Request, res: Response) => {
+  try {
+    const { predictSpeculationPeak } = await import('./services/predictiveEngine');
+    const prediction = await predictSpeculationPeak();
+    res.json(prediction || { message: 'No peak detected' });
+  } catch (error) {
+    console.error('Speculation prediction error:', error);
+    res.status(500).json({ error: 'Failed to predict speculation peak' });
+  }
+});
+
+app.get('/predict/execution-windows', async (_req: Request, res: Response) => {
+  try {
+    const { predictExecutionWindows } = await import('./services/predictiveEngine');
+    const predictions = await predictExecutionWindows();
+    res.json({ predictions, count: predictions.length });
+  } catch (error) {
+    console.error('Execution window prediction error:', error);
+    res.status(500).json({ error: 'Failed to predict execution windows' });
+  }
+});
+
