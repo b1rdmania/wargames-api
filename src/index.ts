@@ -2115,13 +2115,13 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
       background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%);
       padding: 40px 20px;
       text-align: center;
-      border-bottom: 2px solid #00ff88;
+      border-bottom: 2px solid #0a0;
     }
     h1 {
-      color: #00ff88;
+      color: #0f0;
       font-size: 2.5rem;
       margin-bottom: 10px;
-      text-shadow: 0 0 20px #00ff8850;
+      text-shadow: 0 0 10px #0f0;
     }
     .tagline {
       color: #888;
@@ -2140,7 +2140,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     }
     .stat-value {
       font-size: 2rem;
-      color: #00ff88;
+      color: #0f0;
       font-weight: bold;
     }
     .stat-label {
@@ -2158,7 +2158,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
       margin-bottom: 50px;
     }
     .section-title {
-      color: #00ff88;
+      color: #0f0;
       font-size: 1.5rem;
       margin-bottom: 20px;
       border-bottom: 1px solid #222;
@@ -2170,8 +2170,8 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     .badge {
       display: inline-block;
       padding: 4px 10px;
-      background: #00ff8820;
-      color: #00ff88;
+      background: rgba(0, 255, 0, 0.15);
+      color: #0f0;
       border-radius: 12px;
       font-size: 0.7rem;
       font-weight: bold;
@@ -2194,8 +2194,8 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
       transition: all 0.3s;
     }
     .integration-card:hover {
-      border-color: #00ff88;
-      box-shadow: 0 4px 20px rgba(0, 255, 136, 0.2);
+      border-color: #0f0;
+      box-shadow: 0 4px 20px rgba(0, 255, 0, 0.2);
       transform: translateY(-2px);
     }
     .integration-header {
@@ -2206,7 +2206,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     }
     .integration-name {
       font-size: 1.3rem;
-      color: #00ff88;
+      color: #0f0;
       font-weight: bold;
     }
     .integration-category {
@@ -2235,7 +2235,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     }
     .endpoint-tag {
       background: #222;
-      color: #00ff88;
+      color: #0f0;
       padding: 5px 12px;
       border-radius: 4px;
       font-size: 0.75rem;
@@ -2254,15 +2254,15 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
       color: #666;
     }
     .meta-item span {
-      color: #00ff88;
+      color: #0f0;
     }
     .meta-link {
-      color: #00ff88;
+      color: #0f0;
       text-decoration: none;
       transition: color 0.2s;
     }
     .meta-link:hover {
-      color: #00ffaa;
+      color: #0f0;
       text-decoration: underline;
     }
     .testimonial {
@@ -2289,7 +2289,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
       display: inline-block;
       margin-top: 20px;
       padding: 15px 30px;
-      background: linear-gradient(135deg, #00ff88 0%, #00cc70 100%);
+      background: linear-gradient(135deg, #0f0 0%, #0a0 100%);
       color: #000;
       text-decoration: none;
       border-radius: 6px;
@@ -2298,7 +2298,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     }
     .cta:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 20px rgba(0, 255, 136, 0.5);
+      box-shadow: 0 4px 20px rgba(0, 255, 0, 0.5);
     }
   </style>
 </head>
@@ -2481,7 +2481,7 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     }
     .header h1 {
       font-size: 3.5rem;
-      color: #00ff88;
+      color: #0f0;
       letter-spacing: 12px;
       margin-bottom: 10px;
       text-shadow: 0 0 30px #00ff8850;
@@ -2505,7 +2505,7 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     .stat-value {
       font-size: 1.8rem;
       font-weight: bold;
-      color: #00ff88;
+      color: #0f0;
     }
     .stat-label {
       font-size: 0.7rem;
@@ -2534,7 +2534,7 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
       border-color: #00ff8830;
     }
     .card h2 {
-      color: #00ff88;
+      color: #0f0;
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 2px;
@@ -2580,7 +2580,7 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
       font-size: 0.9rem;
     }
     .component-value {
-      color: #00ff88;
+      color: #0f0;
       font-weight: bold;
       font-size: 1.1rem;
     }
@@ -2650,7 +2650,7 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     }
     .prediction-odds {
       font-weight: bold;
-      color: #00ff88;
+      color: #0f0;
       font-size: 1.1rem;
     }
     .narrative {
@@ -2670,7 +2670,7 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     }
     .narrative-score {
       font-weight: bold;
-      color: #00ff88;
+      color: #0f0;
       font-size: 1rem;
     }
     .narrative-bar {
@@ -2729,12 +2729,12 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
       font-size: 0.85rem;
     }
     .footer a {
-      color: #00ff88;
+      color: #0f0;
       text-decoration: none;
       transition: color 0.2s;
     }
     .footer a:hover {
-      color: #00ffaa;
+      color: #0f0;
     }
     .api-links {
       display: flex;
@@ -2746,7 +2746,7 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     .api-link {
       display: inline-block;
       padding: 12px 24px;
-      background: linear-gradient(135deg, #00ff88 0%, #00cc70 100%);
+      background: linear-gradient(135deg, #0f0 0%, #0a0 100%);
       color: #000;
       text-decoration: none;
       border-radius: 6px;
@@ -2761,8 +2761,8 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     }
     .api-link.secondary {
       background: linear-gradient(135deg, #333 0%, #222 100%);
-      color: #00ff88;
-      border: 1px solid #00ff8850;
+      color: #0f0;
+      border: 1px solid #0a0;
     }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -2781,8 +2781,8 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     .badge {
       display: inline-block;
       padding: 4px 10px;
-      background: #00ff8820;
-      color: #00ff88;
+      background: rgba(0, 255, 0, 0.15);
+      color: #0f0;
       border-radius: 12px;
       font-size: 0.7rem;
       font-weight: bold;
