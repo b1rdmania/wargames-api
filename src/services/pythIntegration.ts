@@ -65,8 +65,11 @@ export async function fetchPythPrices(): Promise<PythPrice[]> {
     const price = parseFloat(feed.price.price) * Math.pow(10, feed.price.expo);
     const confidence = parseFloat(feed.price.conf) * Math.pow(10, feed.price.expo);
 
+    // Map ID to symbol (check both with and without 0x prefix)
+    const symbol = SYMBOL_MAP[feed.id] || SYMBOL_MAP[`0x${feed.id}`] || feed.id;
+
     return {
-      symbol: SYMBOL_MAP[feed.id] || feed.id,
+      symbol,
       id: feed.id,
       price: Math.round(price * 100) / 100, // Round to 2 decimals
       confidence: Math.round(confidence * 100) / 100,
