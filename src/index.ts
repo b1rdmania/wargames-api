@@ -3624,17 +3624,345 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
       font-size: 10px;
     }
 
+    /* Hero Section Styles */
+    .hero-section {
+      border: 2px solid #f9c262;
+      background: linear-gradient(135deg, #0e1822 0%, #101c28 100%);
+      padding: 25px 30px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 30px;
+      align-items: start;
+    }
+
+    .hero-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f9c262;
+      letter-spacing: 3px;
+      margin-bottom: 12px;
+    }
+
+    .hero-description {
+      font-size: 11px;
+      line-height: 1.7;
+      color: #f0eef5;
+      margin-bottom: 16px;
+    }
+
+    .hero-stats {
+      font-size: 10px;
+      line-height: 1.6;
+      color: #6b6879;
+      margin-bottom: 16px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .hero-button {
+      background: #234055;
+      padding: 8px 16px;
+      text-decoration: none;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      border-radius: 2px;
+      border: 1px solid;
+      transition: all 0.2s;
+      display: inline-block;
+    }
+
+    .hero-button-docs {
+      color: #36d4ff;
+      border-color: #36d4ff;
+    }
+
+    .hero-button-github {
+      color: #02ff81;
+      border-color: #02ff81;
+    }
+
+    .hero-button-project {
+      color: #cfbeff;
+      border-color: #cfbeff;
+    }
+
+    .hero-sidebar {
+      border-left: 2px solid #f9c262;
+      padding-left: 30px;
+      min-width: 320px;
+    }
+
+    .hero-sidebar-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #02ff81;
+      letter-spacing: 2px;
+      margin-bottom: 10px;
+    }
+
+    .hero-code-block {
+      background: #070d14;
+      padding: 12px;
+      border-radius: 2px;
+      font-size: 10px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      border: 1px solid #234055;
+    }
+
+    .hero-code-example {
+      background: #070d14;
+      padding: 12px;
+      border-radius: 2px;
+      font-size: 9px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      border: 1px solid #234055;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .hero-note {
+      font-size: 9px;
+      color: #6b6879;
+      line-height: 1.5;
+    }
+
+    /* iOS and Mobile Optimization */
     @media (max-width: 768px) {
-      .grid {
-        grid-template-columns: 1fr;
+      body {
+        padding: 10px;
       }
 
-      .rwa-grid {
+      .terminal {
+        overflow-x: hidden;
+      }
+
+      .header {
+        padding: 15px 20px;
+      }
+
+      .title {
+        font-size: 18px;
+        letter-spacing: 3px;
+      }
+
+      .subtitle {
+        font-size: 9px;
+        letter-spacing: 2px;
+      }
+
+      /* Hero Section Mobile */
+      .hero-section {
+        padding: 15px 20px;
+      }
+
+      .hero-grid {
         grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .hero-title {
+        font-size: 11px;
+        letter-spacing: 2px;
+      }
+
+      .hero-description {
+        font-size: 10px;
+        line-height: 1.6;
+      }
+
+      .hero-stats {
+        font-size: 9px;
+        line-height: 1.5;
+      }
+
+      .hero-buttons {
+        gap: 10px;
+      }
+
+      .hero-button {
+        flex: 1;
+        min-width: 120px;
+        text-align: center;
+        padding: 12px 16px;
+        font-size: 10px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .hero-sidebar {
+        border-left: none;
+        border-top: 2px solid #f9c262;
+        padding-left: 0;
+        padding-top: 20px;
+        min-width: auto;
+      }
+
+      .hero-sidebar-title {
+        font-size: 10px;
+      }
+
+      .hero-code-block {
+        padding: 10px;
+        font-size: 9px;
+      }
+
+      .hero-code-example {
+        padding: 10px;
+        font-size: 8px;
+        overflow-x: auto;
+      }
+
+      .hero-note {
+        font-size: 8px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+      }
+
+      .status-bar {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+
+      .status-item {
+        padding: 10px 12px;
+        font-size: 8px;
+      }
+
+      .status-value {
+        font-size: 14px;
+      }
+
+      .panel-header {
+        padding: 10px 15px;
+        font-size: 9px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .panel-badge {
+        font-size: 7px;
+        padding: 2px 6px;
+      }
+
+      .panel-content {
+        padding: 15px;
       }
 
       .metric-value {
         font-size: 48px;
+      }
+
+      .metric-label {
+        font-size: 11px;
+        letter-spacing: 2px;
+      }
+
+      .data-row {
+        padding: 8px 0;
+        font-size: 10px;
+      }
+
+      .data-label {
+        font-size: 8px;
+      }
+
+      .crypto-row {
+        grid-template-columns: 50px 1fr auto;
+        gap: 8px;
+        padding: 10px 0;
+      }
+
+      .crypto-symbol {
+        font-size: 9px;
+      }
+
+      .crypto-price {
+        font-size: 10px;
+      }
+
+      .crypto-change {
+        font-size: 9px;
+      }
+
+      .rwa-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .rwa-item {
+        padding: 10px;
+      }
+
+      .rwa-label {
+        font-size: 8px;
+      }
+
+      .rwa-value {
+        font-size: 11px;
+      }
+
+      .footer {
+        padding: 15px;
+        font-size: 8px;
+      }
+
+      .footer p {
+        font-size: 8px !important;
+      }
+
+      /* Make links touch-friendly (except hero buttons which have their own styles) */
+      .panel-content a,
+      .footer a {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 16px;
+      }
+
+      /* Fix overflow on code blocks */
+      code {
+        font-size: 8px !important;
+        word-break: break-all;
+        overflow-x: auto;
+        display: block;
+      }
+
+      /* Better text wrapping */
+      .data-value {
+        word-break: break-word;
+      }
+    }
+
+    /* iPhone SE and smaller */
+    @media (max-width: 375px) {
+      .title {
+        font-size: 16px;
+        letter-spacing: 2px;
+      }
+
+      .status-bar {
+        grid-template-columns: 1fr;
+      }
+
+      .metric-value {
+        font-size: 36px;
       }
     }
   </style>
@@ -3646,35 +3974,35 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
       <div class="subtitle">Real-Time Macro Intelligence Layer // Solana Agent Infrastructure</div>
     </div>
 
-    <div style="border: 2px solid #f9c262; background: linear-gradient(135deg, #0e1822 0%, #101c28 100%); padding: 25px 30px; margin-bottom: 20px; border-radius: 4px;">
-      <div style="display: grid; grid-template-columns: 1fr auto; gap: 30px; align-items: start;">
-        <div>
-          <div style="font-size: 14px; font-weight: 700; color: #f9c262; letter-spacing: 3px; margin-bottom: 12px;">COLOSSEUM AGENT HACKATHON 2026</div>
-          <div style="font-size: 11px; line-height: 1.7; color: #f0eef5; margin-bottom: 16px;">
+    <div class="hero-section">
+      <div class="hero-grid">
+        <div class="hero-main">
+          <div class="hero-title">COLOSSEUM AGENT HACKATHON 2026</div>
+          <div class="hero-description">
             Experimental infrastructure providing <strong style="color: #36d4ff;">macro intelligence as a service</strong>. Testing thesis: can a comprehensive API ecosystem integrate across autonomous agents and provide real value as shared infrastructure?
           </div>
-          <div style="font-size: 10px; line-height: 1.6; color: #6b6879; margin-bottom: 16px;">
+          <div class="hero-stats">
             <strong style="color: #f0eef5;">8 Solana Integrations:</strong> Pyth, Jupiter, Drift ($364M), Kamino ($2.06B), Meteora ($501M), MarginFi ($88M), Raydium, Orca<br>
             <strong style="color: #f0eef5;">37+ API Endpoints</strong> | <strong style="color: #f0eef5;">Verifiable Risk Timeline (predict → prescribe → prove)</strong> | <strong style="color: #f0eef5;">RADU: 78/100 performance score</strong>
           </div>
-          <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-            <a href="/" style="background: #234055; color: #36d4ff; padding: 8px 16px; text-decoration: none; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; border-radius: 2px; border: 1px solid #36d4ff; transition: all 0.2s;">📖 API DOCS</a>
-            <a href="https://github.com/b1rdmania/wargames-api" target="_blank" style="background: #234055; color: #02ff81; padding: 8px 16px; text-decoration: none; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; border-radius: 2px; border: 1px solid #02ff81; transition: all 0.2s;">💻 GITHUB</a>
-            <a href="https://colosseum.com/agent-hackathon/projects/wargames" target="_blank" style="background: #234055; color: #cfbeff; padding: 8px 16px; text-decoration: none; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; border-radius: 2px; border: 1px solid #cfbeff; transition: all 0.2s;">🏆 PROJECT PAGE</a>
+          <div class="hero-buttons">
+            <a href="/" class="hero-button hero-button-docs">📖 API DOCS</a>
+            <a href="https://github.com/b1rdmania/wargames-api" target="_blank" class="hero-button hero-button-github">💻 GITHUB</a>
+            <a href="https://colosseum.com/agent-hackathon/projects/wargames" target="_blank" class="hero-button hero-button-project">🏆 PROJECT PAGE</a>
           </div>
         </div>
-        <div style="border-left: 2px solid #f9c262; padding-left: 30px; min-width: 320px;">
-          <div style="font-size: 11px; font-weight: 700; color: #02ff81; letter-spacing: 2px; margin-bottom: 10px;">FOR AGENTS: QUICK START</div>
-          <div style="background: #070d14; padding: 12px; border-radius: 2px; font-size: 10px; line-height: 1.6; margin-bottom: 12px; border: 1px solid #234055;">
+        <div class="hero-sidebar">
+          <div class="hero-sidebar-title">FOR AGENTS: QUICK START</div>
+          <div class="hero-code-block">
             <div style="color: #6b6879; margin-bottom: 6px;"># Install SDK</div>
             <div style="color: #36d4ff; font-family: 'JetBrains Mono', monospace;">npm install @wargames/sdk</div>
           </div>
-          <div style="background: #070d14; padding: 12px; border-radius: 2px; font-size: 9px; line-height: 1.6; margin-bottom: 12px; border: 1px solid #234055; font-family: 'JetBrains Mono', monospace;">
+          <div class="hero-code-example">
             <div style="color: #cfbeff;">const</div> <div style="color: #f0eef5; display: inline;">wargames =</div> <div style="color: #cfbeff; display: inline;">new</div> <div style="color: #02ff81; display: inline;">WARGAMES</div><div style="color: #f0eef5; display: inline;">();</div><br>
             <div style="color: #cfbeff;">const</div> <div style="color: #f0eef5; display: inline;">{ score } =</div> <div style="color: #cfbeff; display: inline;">await</div> <div style="color: #f0eef5; display: inline;">wargames.</div><div style="color: #02ff81; display: inline;">getRisk</div><div style="color: #f0eef5; display: inline;">();</div><br><br>
             <div style="color: #cfbeff;">if</div> <div style="color: #f0eef5; display: inline;">(score ></div> <div style="color: #f9c262; display: inline;">70</div><div style="color: #f0eef5; display: inline;">) {</div> <div style="color: #6b6879; display: inline;">// Reduce exposure</div> <div style="color: #f0eef5; display: inline;">}</div>
           </div>
-          <div style="font-size: 9px; color: #6b6879; line-height: 1.5;">
+          <div class="hero-note">
             <strong style="color: #f0eef5;">For judges/humans:</strong> This dashboard shows real-time data. Try the <a href="/" style="color: #36d4ff;">API</a> or check our <a href="https://github.com/b1rdmania/wargames-api" target="_blank" style="color: #36d4ff;">repo</a>.
           </div>
         </div>
