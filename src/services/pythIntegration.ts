@@ -87,7 +87,20 @@ const SYMBOL_MAP: Record<string, string> = {
  * Fetch latest prices from Pyth Network
  */
 export async function fetchPythPrices(): Promise<PythPrice[]> {
-  const priceIds = Object.values(PYTH_PRICE_IDS);
+  // Use top 10 most important tokens to avoid API limits and invalid IDs
+  const topTokens = [
+    PYTH_PRICE_IDS.BTC,
+    PYTH_PRICE_IDS.ETH,
+    PYTH_PRICE_IDS.SOL,
+    PYTH_PRICE_IDS.BONK,
+    PYTH_PRICE_IDS.JUP,
+    PYTH_PRICE_IDS.USDC,
+    PYTH_PRICE_IDS.USDT,
+    PYTH_PRICE_IDS.AVAX,
+    PYTH_PRICE_IDS.LINK,
+    PYTH_PRICE_IDS.UNI
+  ];
+  const priceIds = topTokens;
 
   const url = `https://hermes.pyth.network/api/latest_price_feeds?ids[]=${priceIds.join('&ids[]=')}`;
 
