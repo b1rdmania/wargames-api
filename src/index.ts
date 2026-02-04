@@ -35,6 +35,16 @@ import {
   getConnectionStats,
   updateLastSeen
 } from './services/agentWallet';
+import {
+  subscribe,
+  unsubscribe,
+  getAllSubscriptions,
+  getSubscription,
+  getWebhookStats,
+  checkRiskChanges,
+  checkNarrativeShifts,
+  notifyHighImpactEvent
+} from './services/webhookManager';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -116,7 +126,11 @@ app.get('/', (_req: Request, res: Response) => {
       '/dashboard': 'Live visual dashboard',
       '/health': 'API status',
       '/integrations': 'Registered integrations',
-      '/subscribe': 'Register for webhooks (POST)'
+      '/subscribe': 'Register for webhooks (POST)',
+      '/webhooks/subscribe': 'Subscribe to event notifications (POST)',
+      '/webhooks/unsubscribe': 'Remove webhook subscription (POST)',
+      '/webhooks/subscriptions': 'List active subscriptions',
+      '/webhooks/stats': 'Webhook system statistics'
     },
     integration_snippet: `
 const { score } = await fetch('https://api.wargames.sol/risk').then(r => r.json());
@@ -315,6 +329,11 @@ app.get('/narratives', async (_req: Request, res: Response) => {
         suggested_action: n.crypto_impact.suggested_action,
         drivers: dynamicData?.drivers || []
       };
+    });
+
+    // Check for narrative shifts and trigger webhooks (non-blocking)
+    checkNarrativeShifts(summary.map(n => ({ id: n.id, current_score: n.score }))).catch(err => {
+      console.error('Webhook error:', err);
     });
 
     res.json({
@@ -555,6 +574,11 @@ app.get('/live/risk', async (_req: Request, res: Response) => {
   try {
     const risk = await calculateDynamicRisk();
     const fearGreed = await fetchFearGreed();
+
+    // Check for risk changes and trigger webhooks (non-blocking)
+    checkRiskChanges(risk.score).catch(err => {
+      console.error('Webhook error:', err);
+    });
 
     res.json({
       score: risk.score,
@@ -1324,6 +1348,182 @@ app.get('/wallet/connections', (_req: Request, res: Response) => {
     });
   }
 });
+
+// =============================================================================
+// WEBHOOK ALERTS
+// =============================================================================
+
+/**
+ * POST /webhooks/subscribe
+ * Subscribe to webhook notifications for macro events
+ *
+ * Body:
+ * {
+ *   "url": "https://your-agent.com/webhook",
+ *   "agentName": "your-agent-name",
+ *   "events": ["risk_spike", "risk_drop", "high_impact_event", "narrative_shift"],
+ *   "thresholds": {
+ *     "riskSpike": 10,  // Optional: trigger if risk increases by 10+ points
+ *     "riskDrop": 10,   // Optional: trigger if risk decreases by 10+ points
+ *     "minRisk": 50,    // Optional: only trigger if risk is above 50
+ *     "maxRisk": 80     // Optional: only trigger if risk is below 80
+ *   }
+ * }
+ */
+app.post('/webhooks/subscribe', (req: Request, res: Response) => {
+  try {
+    const { url, agentName, events, thresholds } = req.body;
+
+    if (!url || !agentName || !events || !Array.isArray(events)) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: {
+          url: 'string (webhook URL)',
+          agentName: 'string (your agent name)',
+          events: 'array (event types to subscribe to)'
+        },
+        example: {
+          url: 'https://your-agent.com/webhook',
+          agentName: 'my-trading-bot',
+          events: ['risk_spike', 'risk_drop'],
+          thresholds: {
+            riskSpike: 10,
+            minRisk: 50
+          }
+        }
+      });
+    }
+
+    const validEvents = ['risk_spike', 'risk_drop', 'high_impact_event', 'narrative_shift'];
+    const invalidEvents = events.filter((e: string) => !validEvents.includes(e));
+
+    if (invalidEvents.length > 0) {
+      return res.status(400).json({
+        error: 'Invalid event types',
+        invalid: invalidEvents,
+        valid_events: validEvents
+      });
+    }
+
+    const subscription = subscribe(url, agentName, events, thresholds);
+
+    res.json({
+      success: true,
+      message: 'Webhook subscription created',
+      subscription,
+      nextSteps: [
+        'Webhooks will be sent via POST with JSON payload',
+        'Check headers: X-Webhook-Event, X-Webhook-Subscription',
+        'Verify payload.subscription_id matches your subscription.id',
+        'Use POST /webhooks/unsubscribe to remove subscription'
+      ],
+      note: 'Webhook system checks for changes every 5 minutes'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to create subscription',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /webhooks/unsubscribe
+ * Unsubscribe from webhook notifications
+ *
+ * Body:
+ * {
+ *   "subscriptionId": "sub_..."
+ * }
+ */
+app.post('/webhooks/unsubscribe', (req: Request, res: Response) => {
+  try {
+    const { subscriptionId } = req.body;
+
+    if (!subscriptionId) {
+      return res.status(400).json({
+        error: 'Missing subscriptionId',
+        example: {
+          subscriptionId: 'sub_1234567890_abc123'
+        }
+      });
+    }
+
+    const success = unsubscribe(subscriptionId);
+
+    if (!success) {
+      return res.status(404).json({
+        error: 'Subscription not found',
+        subscriptionId
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Webhook subscription removed',
+      subscriptionId
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to unsubscribe',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /webhooks/subscriptions
+ * List all active webhook subscriptions (for agent to check their subscriptions)
+ */
+app.get('/webhooks/subscriptions', (req: Request, res: Response) => {
+  try {
+    const { agentName } = req.query;
+    let subs = getAllSubscriptions();
+
+    // Filter by agent name if provided
+    if (agentName) {
+      subs = subs.filter(s => s.agentName === agentName);
+    }
+
+    res.json({
+      count: subs.length,
+      subscriptions: subs.map(s => ({
+        id: s.id,
+        agentName: s.agentName,
+        url: s.url,
+        events: s.events,
+        thresholds: s.thresholds,
+        createdAt: s.createdAt,
+        lastTriggered: s.lastTriggered
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to list subscriptions',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /webhooks/stats
+ * Get webhook system statistics
+ */
+app.get('/webhooks/stats', (_req: Request, res: Response) => {
+  try {
+    const stats = getWebhookStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to get webhook stats',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// =============================================================================
+// PREMIUM ENDPOINTS
+// =============================================================================
 
 /**
  * GET /premium/risk-detailed
