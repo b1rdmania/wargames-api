@@ -9,6 +9,7 @@
 
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import path from 'path';
 import { narratives, calculateGlobalRisk, Narrative } from './data/narratives';
 import { events, getUpcomingEvents, getHighImpactEvents } from './data/events';
 import { integrations, getIntegrationStats, getProductionIntegrations, getTestingIntegrations, getPlannedIntegrations } from './data/integrations';
@@ -4416,6 +4417,26 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
 app.get('/dashboard/radu', (_req: Request, res: Response) => {
   const { raduDashboardHTML } = require('./dashboards/raduDashboard');
   res.send(raduDashboardHTML);
+});
+
+// =============================================================================
+// PITCH DECK
+// =============================================================================
+
+/**
+ * GET /pitch.html
+ * Serve the pitch deck page
+ */
+app.get('/pitch.html', (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, '../pitch.html'));
+});
+
+/**
+ * GET /pitch
+ * Redirect to pitch.html
+ */
+app.get('/pitch', (_req: Request, res: Response) => {
+  res.redirect('/pitch.html');
 });
 
 // =============================================================================
