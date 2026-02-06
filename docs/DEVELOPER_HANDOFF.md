@@ -614,7 +614,7 @@ curl https://wargames-api.fly.dev/events/next-critical | jq '.event'
 ### **Questions?**
 - API Docs: https://wargames-api.fly.dev
 - Status Doc: `/docs/war-room-feed-status.md` in repo
-- Contact: Original developer (Andy)
+- Contact: Original developer (Birdmania)
 
 ---
 
