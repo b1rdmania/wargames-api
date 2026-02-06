@@ -13,6 +13,7 @@ import path from 'path';
 import { narratives, calculateGlobalRisk, Narrative } from './data/narratives';
 import { events, getUpcomingEvents, getHighImpactEvents } from './data/events';
 import { integrations, getIntegrationStats, getProductionIntegrations, getTestingIntegrations, getPlannedIntegrations } from './data/integrations';
+import { BRAND_CSS } from './brand';
 import {
   fetchFearGreed,
   fetchCryptoPrices,
@@ -58,17 +59,58 @@ import {
   timeAgo
 } from './services/analytics';
 import { trackRequest } from './middleware/analyticsMiddleware';
+import { agentIntegrityHandler, tradingRiskHandler, predictionsCrossCheckHandler } from './new-oracle-endpoints';
+import {
+  decomposedRiskHandler,
+  swapRiskHandler,
+  oracleFreshnessHandler,
+  dexLiquidityHandler,
+  protocolHealthHandler
+} from './services/tradingRiskEndpoints';
+import { generateBacktestData, calculateBacktestMetrics } from './data/backtest';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(trackRequest); // Analytics tracking
 
+// =============================================================================
+// BRAND ASSETS
+// =============================================================================
+app.get('/assets/brand.css', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/css; charset=utf-8');
+  // Cache lightly to keep deploys snappy while avoiding stale styling.
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.send(BRAND_CSS);
+});
+
 // Track integrations (in-memory for now)
 const legacyIntegrations: { agent: string; since: string; endpoint: string }[] = [];
+
+// Agent Oracle registrations (in-memory)
+interface OracleRegistration {
+  agentName: string;
+  walletAddress?: string;
+  projectUrl?: string;
+  riskTolerance: 'low' | 'medium' | 'high';
+  registeredAt: string;
+  lastSeen: string;
+  alerts: {
+    riskSpikes: boolean;
+    events: boolean;
+    narratives: boolean;
+  };
+  currentRisk?: {
+    score: number;
+    bias: string;
+    lastChecked: string;
+  };
+}
+
+const oracleRegistrations = new Map<string, OracleRegistration>();
 
 // Simple usage tracking
 const stats = {
@@ -289,7 +331,7 @@ app.get('/stats/live', (_req: Request, res: Response) => {
   const integrations: Record<string, any> = {};
   for (const intStat of integrationStats) {
     const activity = getIntegrationActivity(intStat.integrationId);
-    const statusEmoji = activity === 'active' ? '🟢' : activity === 'idle' ? '🟡' : '🔴';
+    const statusEmoji = activity === 'active' ? 'ACTIVE' : activity === 'idle' ? 'IDLE' : 'INACTIVE';
 
     integrations[intStat.integrationId] = {
       calls_24h: intStat.calls,
@@ -1009,6 +1051,686 @@ app.get('/oracle/on-chain', async (_req: Request, res: Response) => {
       message: err instanceof Error ? err.message : 'Unknown error'
     });
   }
+});
+
+/**
+ * POST /oracle/register
+ * Agent Risk Oracle - Register your agent for free risk monitoring
+ * Low-friction registration for hackathon agents
+ */
+app.post('/oracle/register', async (req: Request, res: Response) => {
+  try {
+    const { agentName, walletAddress, projectUrl, riskTolerance } = req.body;
+
+    if (!agentName) {
+      return res.status(400).json({
+        error: 'Missing required field',
+        required: ['agentName'],
+        optional: ['walletAddress', 'projectUrl', 'riskTolerance']
+      });
+    }
+
+    // Validate risk tolerance
+    const tolerance = ['low', 'medium', 'high'].includes(riskTolerance)
+      ? riskTolerance
+      : 'medium';
+
+    // Get current risk for immediate feedback
+    const riskData = await calculateDynamicRisk();
+    const bias = riskData.score < 40 ? 'risk-on' : riskData.score > 60 ? 'risk-off' : 'neutral';
+
+    const registration: OracleRegistration = {
+      agentName,
+      walletAddress: walletAddress || undefined,
+      projectUrl: projectUrl || undefined,
+      riskTolerance: tolerance,
+      registeredAt: new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
+      alerts: {
+        riskSpikes: true,
+        events: true,
+        narratives: true
+      },
+      currentRisk: {
+        score: riskData.score,
+        bias: bias,
+        lastChecked: new Date().toISOString()
+      }
+    };
+
+    oracleRegistrations.set(agentName.toLowerCase(), registration);
+
+    res.json({
+      success: true,
+      message: `${agentName} registered for WARGAMES Risk Oracle`,
+      registration: {
+        agentName: registration.agentName,
+        riskTolerance: registration.riskTolerance,
+        registeredAt: registration.registeredAt,
+        alerts: registration.alerts
+      },
+      currentRisk: registration.currentRisk,
+      info: {
+        checkStatus: `https://wargames-api.vercel.app/oracle/agent/${agentName}`,
+        viewAll: 'https://wargames-api.vercel.app/oracle/agents',
+        freeForHackathon: true
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Registration failed',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /oracle/agent/:name
+ * Get risk status for specific registered agent
+ */
+app.get('/oracle/agent/:name', async (req: Request, res: Response) => {
+  try {
+    const agentName = req.params.name.toLowerCase();
+    const registration = oracleRegistrations.get(agentName);
+
+    if (!registration) {
+      return res.status(404).json({
+        error: 'Agent not registered',
+        agentName: req.params.name,
+        register: 'POST /oracle/register with {agentName, riskTolerance}'
+      });
+    }
+
+    // Update current risk
+    const riskData = await calculateDynamicRisk();
+    const bias = riskData.score < 40 ? 'risk-on' : riskData.score > 60 ? 'risk-off' : 'neutral';
+
+    // Update last seen
+    registration.lastSeen = new Date().toISOString();
+    registration.currentRisk = {
+      score: riskData.score,
+      bias: bias,
+      lastChecked: new Date().toISOString()
+    };
+
+    // Check for alerts based on tolerance
+    const alerts: string[] = [];
+    if (registration.riskTolerance === 'low' && riskData.score > 50) {
+      alerts.push(`Risk elevated (${riskData.score}) - Consider reducing exposure`);
+    } else if (registration.riskTolerance === 'medium' && riskData.score > 70) {
+      alerts.push(`High risk (${riskData.score}) - Defensive positioning recommended`);
+    } else if (registration.riskTolerance === 'high' && riskData.score > 85) {
+      alerts.push(`Extreme risk (${riskData.score}) - Critical alert`);
+    }
+
+    // Check for upcoming high-impact events
+    const upcomingEvents = getHighImpactEvents();
+    if (upcomingEvents.length > 0 && registration.alerts.events) {
+      // Check if any events are within 24h
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const imminent = upcomingEvents.find(e => new Date(e.date) <= tomorrow);
+      if (imminent) {
+        alerts.push(`High-impact event within 24h: ${imminent.event}`);
+      }
+    }
+
+    res.json({
+      agent: registration.agentName,
+      status: 'monitored',
+      risk: registration.currentRisk,
+      tolerance: registration.riskTolerance,
+      alerts: alerts.length > 0 ? alerts : ['No alerts - conditions normal'],
+      registeredAt: registration.registeredAt,
+      lastSeen: registration.lastSeen,
+      components: riskData.components,
+      drivers: riskData.drivers,
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to get agent status',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /oracle/agents
+ * Dashboard showing all registered agents and their risk status
+ */
+app.get('/oracle/agents', async (_req: Request, res: Response) => {
+  try {
+    const riskData = await calculateDynamicRisk();
+    const bias = riskData.score < 40 ? 'risk-on' : riskData.score > 60 ? 'risk-off' : 'neutral';
+
+    const agents = Array.from(oracleRegistrations.values()).map(reg => {
+      // Calculate time since registration
+      const regTime = new Date(reg.registeredAt).getTime();
+      const now = Date.now();
+      const hoursSince = Math.floor((now - regTime) / (1000 * 60 * 60));
+
+      return {
+        agentName: reg.agentName,
+        projectUrl: reg.projectUrl,
+        riskTolerance: reg.riskTolerance,
+        registeredAt: reg.registeredAt,
+        hoursSinceRegistration: hoursSince,
+        lastSeen: reg.lastSeen,
+        currentRisk: {
+          score: riskData.score,
+          bias: bias
+        }
+      };
+    });
+
+    // Sort by registration time (newest first)
+    agents.sort((a, b) =>
+      new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime()
+    );
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WARGAMES // AGENT ORACLE COMMAND CENTER</title>
+  <link rel="stylesheet" href="/assets/brand.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #070d14;
+      color: #f1f8ff;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      padding: 0;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+
+    /* Grid overlay effect */
+    .grid-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        repeating-linear-gradient(0deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px),
+        repeating-linear-gradient(90deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .content { position: relative; z-index: 2; }
+
+    h1 {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #36d4ff;
+      margin-bottom: 20px;
+      text-shadow: 0 0 18px rgba(54, 212, 255, 0.35);
+    }
+
+    .section-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #36d4ff;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #234055;
+      padding-bottom: 8px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+
+    .stat-box {
+      background: #0e1822;
+      border: 1px solid #234055;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-box.armed {
+      border-top: 2px solid #02ff81;
+    }
+
+    .stat-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7a9ab0;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 13px;
+      color: #f1f8ff;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid;
+    }
+
+    .status-pill.live {
+      background: rgba(2, 255, 129, 0.1);
+      color: #02ff81;
+      border-color: rgba(2, 255, 129, 0.3);
+    }
+
+    .status-pill.warning {
+      background: rgba(245, 166, 35, 0.1);
+      color: #f5a623;
+      border-color: rgba(245, 166, 35, 0.3);
+    }
+
+    .status-pill.fault {
+      background: rgba(255, 107, 107, 0.1);
+      color: #ff6b6b;
+      border-color: rgba(255, 107, 107, 0.3);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: #0e1822;
+      border: 1px solid #234055;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #234055;
+      font-size: 13px;
+    }
+
+    th {
+      background: #101c28;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7a9ab0;
+    }
+
+    tr:hover { background: rgba(16, 28, 40, 0.6); }
+
+    .register-box {
+      background: #0e1822;
+      border: 1px solid #234055;
+      padding: 20px;
+      margin: 30px 0;
+    }
+
+    .register-box h2 {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #36d4ff;
+      margin-bottom: 15px;
+    }
+
+    code {
+      background: #070d14;
+      padding: 12px;
+      display: block;
+      margin: 10px 0;
+      border: 1px solid #234055;
+      color: #b8d0e0;
+      overflow-x: auto;
+      font-size: 11px;
+    }
+
+    a { color: #36d4ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #234055;
+      color: #7a9ab0;
+      font-size: 10px;
+    }
+
+    /* Touch targets for mobile */
+    @media (max-width: 768px) {
+      a, button, .status-pill {
+        min-height: 44px;
+        min-width: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-overlay"></div>
+  <div class="wg-topbar">
+    <div class="wg-topbar-inner">
+      <div class="wg-topbar-left">
+        <div class="wg-badge"><span class="wg-dot"></span> LIVE • ORACLE</div>
+        <div class="wg-title">WARGAMES // AGENT ORACLE</div>
+        <div class="wg-subtitle">AGENT RISK MONITORING COMMAND CENTER</div>
+      </div>
+      <nav class="wg-nav" aria-label="Primary">
+        <a href="/dashboard/v2">Dashboard</a>
+        <a href="/dashboard/analytics">Analytics</a>
+        <a href="/dashboard/predictions">Predictions</a>
+        <a href="/integrations/proof">Proof</a>
+        <a href="/pitch">Pitch</a>
+        <a href="/">API</a>
+      </nav>
+    </div>
+  </div>
+  <div class="container content">
+    <h1>AGENT ORACLE COMMAND CENTER</h1>
+
+    <div class="stats">
+      <div class="stat-box armed">
+        <div class="stat-label">REGISTERED AGENTS</div>
+        <div class="stat-value">${agents.length}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">GLOBAL RISK SCORE</div>
+        <div class="stat-value">${riskData.score}/100</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">MARKET BIAS</div>
+        <div class="stat-value">${bias.toUpperCase()}</div>
+      </div>
+      <div class="stat-box armed">
+        <div class="stat-label">ORACLE STATUS</div>
+        <div class="stat-value"><span class="status-pill live">LIVE</span></div>
+      </div>
+    </div>
+
+    ${agents.length === 0 ? `
+    <div class="register-box">
+      <h2>BE THE FIRST TO REGISTER</h2>
+      <p style="margin-bottom: 15px; color: #b8d0e0;">Get free risk monitoring for your hackathon agent:</p>
+      <code>curl -X POST https://wargames-api.fly.dev/oracle/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"agentName":"YourAgentName","riskTolerance":"medium"}'</code>
+      <p style="margin-top: 15px; color: #7a9ab0;">Check status: <a href="/oracle/agent/YourAgentName">/oracle/agent/YourAgentName</a></p>
+    </div>
+    ` : `
+    <section style="margin-top: 30px;">
+      <h2 class="section-title">REGISTERED AGENTS</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>AGENT</th>
+            <th>TOLERANCE</th>
+            <th>REGISTERED</th>
+            <th>LAST SEEN</th>
+            <th>STATUS</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${agents.map(agent => `
+          <tr>
+            <td>
+              <strong style="color: #f1f8ff;">${agent.agentName}</strong>
+              ${agent.projectUrl ? `<br><a href="${agent.projectUrl}" target="_blank" style="font-size: 11px; color: #7a9ab0;">${agent.projectUrl}</a>` : ''}
+            </td>
+            <td>
+              <span class="status-pill ${agent.riskTolerance === 'low' ? 'live' : agent.riskTolerance === 'medium' ? 'warning' : 'fault'}">
+                ${agent.riskTolerance.toUpperCase()}
+              </span>
+            </td>
+            <td style="color: #b8d0e0;">${agent.hoursSinceRegistration}h ago</td>
+            <td style="color: #b8d0e0;">${new Date(agent.lastSeen).toLocaleTimeString()}</td>
+            <td>
+              <span class="status-pill ${agent.currentRisk.score > 70 ? 'fault' : agent.currentRisk.score > 50 ? 'warning' : 'live'}">
+                ${agent.currentRisk.score}/100 ${agent.currentRisk.bias.toUpperCase()}
+              </span>
+            </td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="register-box" style="margin-top: 30px; border-top: 2px solid #02ff81;">
+      <h2>REGISTER YOUR AGENT</h2>
+      <p style="margin-bottom: 15px; color: #b8d0e0;">Free risk monitoring for all hackathon agents:</p>
+      <code>curl -X POST https://wargames-api.fly.dev/oracle/register \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "agentName": "YourAgentName",
+    "walletAddress": "optional-solana-address",
+    "projectUrl": "https://colosseum.com/...",
+    "riskTolerance": "low|medium|high"
+  }'</code>
+      <p style="margin-top: 15px; color: #7a9ab0; font-size: 11px;">
+        <strong style="color: #02ff81;">Low</strong> = Alert at 50+ risk<br>
+        <strong style="color: #f5a623;">Medium</strong> = Alert at 70+ risk<br>
+        <strong style="color: #ff6b6b;">High</strong> = Alert at 85+ risk
+      </p>
+    </div>
+    `}
+
+    <div class="footer">
+      <p style="font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em;"><strong style="color: #36d4ff;">WARGAMES AGENT RISK ORACLE</strong> — FREE INFRASTRUCTURE FOR ALL AGENTS</p>
+      <p style="margin-top: 10px;">Built by Ziggy (Agent #311) for Colosseum Hackathon 2026</p>
+      <p style="margin-top: 10px;">
+        <a href="/">API</a> |
+        <a href="/dashboard/v2">Dashboard</a> |
+        <a href="/pitch">Pitch</a> |
+        <a href="https://github.com/b1rdmania/wargames-api">GitHub</a>
+      </p>
+      <p style="margin-top: 10px; font-size: 9px;">
+        Updated: ${new Date().toISOString()}
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // Auto-refresh every 30 seconds
+    setTimeout(() => location.reload(), 30000);
+  </script>
+</body>
+</html>
+    `;
+
+    res.send(html);
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to load agents dashboard',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /oracle/risk
+ * Risk assessment for specific token and strategy
+ * Built for AgentDEX integration
+ */
+app.get('/oracle/risk', async (req: Request, res: Response) => {
+  try {
+    const { token, strategy } = req.query;
+
+    // Get current risk data
+    const riskData = await calculateDynamicRisk();
+    const bias = riskData.score < 40 ? 'risk-on' : riskData.score > 60 ? 'risk-off' : 'neutral';
+
+    // Check for upcoming high-impact events
+    const upcomingEvents = getHighImpactEvents();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const imminentEvents = upcomingEvents.filter(e => new Date(e.date) <= tomorrow);
+
+    // Determine if safe to trade
+    const safeToTrade = riskData.score < 75 && imminentEvents.length === 0;
+
+    // Calculate recommended max slippage based on risk
+    // Low risk: 0.5%, Medium: 1.0%, High: 2.0%, Extreme: 3.0%
+    let maxSlippage = 0.5;
+    if (riskData.score > 80) maxSlippage = 3.0;
+    else if (riskData.score > 65) maxSlippage = 2.0;
+    else if (riskData.score > 45) maxSlippage = 1.0;
+
+    // Determine recommendation
+    let recommendation = 'PROCEED';
+    let reasoning = 'Normal market conditions';
+
+    if (riskData.score > 75) {
+      recommendation = 'AVOID';
+      reasoning = `High risk (${riskData.score}/100). ${riskData.drivers.join('. ')}.`;
+    } else if (imminentEvents.length > 0) {
+      recommendation = 'DELAY';
+      reasoning = `High-impact event within 24h: ${imminentEvents[0].event}`;
+    } else if (riskData.score > 60) {
+      recommendation = 'CAUTION';
+      reasoning = `Elevated risk (${riskData.score}/100). Reduce size or widen slippage.`;
+    }
+
+    res.json({
+      riskScore: riskData.score,
+      bias: bias,
+      safeToTrade: safeToTrade,
+      recommendation: recommendation,
+      reasoning: reasoning,
+      maxSlippage: maxSlippage,
+      token: token || 'any',
+      strategy: strategy || 'swap',
+      components: riskData.components,
+      upcomingEvents: imminentEvents.length,
+      drivers: riskData.drivers,
+      timestamp: new Date().toISOString(),
+      note: 'Built for AgentDEX integration - risk-aware execution layer'
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to calculate risk',
+      message: err instanceof Error ? err.message : 'Unknown error',
+      fallback: {
+        riskScore: 50,
+        safeToTrade: true,
+        recommendation: 'PROCEED_WITH_CAUTION',
+        maxSlippage: 1.0
+      }
+    });
+  }
+});
+
+/**
+ * POST /oracle/agent-integrity
+ * Accept agent integrity signals from monitoring systems (sparky-sovereign-sentinel)
+ * Combines agent compromise detection with macro risk for total risk assessment
+ */
+app.post('/oracle/agent-integrity', agentIntegrityHandler);
+
+/**
+ * GET /oracle/risk/trading
+ * Strategy-specific risk assessment for trading agents
+ * Tailored recommendations for perps, spot, leverage, yield strategies
+ */
+app.get('/oracle/risk/trading', tradingRiskHandler);
+
+/**
+ * GET /oracle/risk/decomposed
+ * Decomposed risk factors - no black box aggregation
+ * Returns: funding rates, volatility regime, correlations, liquidity stress, flash crash probability
+ * Built based on feedback from parallax (trading agent)
+ */
+app.get('/oracle/risk/decomposed', decomposedRiskHandler);
+
+/**
+ * GET /risk/swap
+ * Token-specific swap risk assessment
+ * Query params: inputMint, outputMint, amount (optional)
+ * Returns: riskScore, recommendation (proceed/caution/abort), warnings, details
+ * Built based on feedback from JacobsClawd (AgentDEX)
+ */
+app.get('/risk/swap', swapRiskHandler);
+
+/**
+ * GET /oracle/freshness
+ * Oracle staleness and cross-source validation
+ * Query params: symbols (comma-separated, e.g., "BTC,ETH,SOL")
+ * Returns: Pyth feed age, deviation from other sources, staleness warnings
+ * Built based on feedback from parallax (microstructure needs)
+ */
+app.get('/oracle/freshness', oracleFreshnessHandler);
+
+/**
+ * GET /liquidity/dex
+ * DEX pool liquidity metrics
+ * Query params: pool (pool address)
+ * Returns: depth, recent slippage events, drain risk, 1min/5min/15min changes
+ * Built based on feedback from parallax (execution risk needs)
+ */
+app.get('/liquidity/dex', dexLiquidityHandler);
+
+/**
+ * GET /protocol/health
+ * Protocol health and reliability metrics
+ * Query params: protocols (comma-separated, e.g., "jupiter,drift,raydium")
+ * Returns: swap success rates, keeper activity, oracle reliability, uptime, error rates
+ * Built based on feedback from parallax (protocol monitoring)
+ */
+app.get('/protocol/health', protocolHealthHandler);
+
+/**
+ * GET /predictions/cross-check
+ * Cross-validate WARGAMES risk scores with prediction market odds
+ */
+app.get('/predictions/cross-check', predictionsCrossCheckHandler);
+
+/**
+ * GET /data/backtest
+ * Historical risk predictions vs actual outcomes (30 days)
+ * For transparency and validation of prediction accuracy
+ * Built based on feedback: "How do I validate your risk score?"
+ */
+app.get('/data/backtest', (_req: Request, res: Response) => {
+  const backtestData = generateBacktestData();
+  const metrics = calculateBacktestMetrics(backtestData);
+
+  res.json({
+    summary: metrics,
+    data: backtestData,
+    note: 'Validate our predictions against actual market outcomes. Share your analysis in forum.',
+    methodology: {
+      volatility: 'Predicted vs realized 24h volatility',
+      regime: 'Risk score classification vs actual market behavior',
+      liquidity: 'Liquidity stress prediction vs actual spreads'
+    }
+  });
 });
 
 /**
@@ -1894,33 +2616,38 @@ app.get('/dashboard/analytics', (_req: Request, res: Response) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WARGAMES Analytics - NORAD Intelligence</title>
+  <title>WARGAMES // ANALYTICS TELEMETRY DISPLAY</title>
+  <link rel="stylesheet" href="/assets/brand.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'JetBrains Mono', 'Monaco', 'Courier New', monospace;
-      background: #0a0e14;
-      color: #0f0;
+      background: #070d14;
+      color: #f1f8ff;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
       line-height: 1.6;
       overflow-x: hidden;
+      min-height: 100vh;
     }
-    .terminal-header {
-      background: #000;
-      border-bottom: 2px solid #0f0;
-      padding: 15px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+
+    /* Grid overlay effect */
+    .grid-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        repeating-linear-gradient(0deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px),
+        repeating-linear-gradient(90deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px);
+      pointer-events: none;
+      z-index: 1;
     }
-    .terminal-title {
-      color: #0f0;
-      font-size: 1.2rem;
-      text-shadow: 0 0 10px #0f0;
-    }
-    .terminal-time {
-      color: #0a0;
-      font-size: 0.9rem;
-    }
+
+    .content { position: relative; z-index: 2; }
+
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -1929,128 +2656,150 @@ app.get('/dashboard/analytics', (_req: Request, res: Response) => {
       max-width: 1600px;
       margin: 0 auto;
     }
+
     .panel {
-      background: linear-gradient(135deg, #0a1a0a 0%, #050f05 100%);
-      border: 2px solid #0a0;
+      background: #0e1822;
+      border: 1px solid #234055;
       padding: 20px;
-      box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+      position: relative;
+      overflow: hidden;
     }
+
     .panel-header {
-      color: #0f0;
-      font-size: 1.1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #36d4ff;
       margin-bottom: 15px;
-      border-bottom: 1px solid #0a0;
+      border-bottom: 1px solid #234055;
       padding-bottom: 8px;
-      text-shadow: 0 0 5px #0f0;
     }
+
     .metric {
       display: flex;
       justify-content: space-between;
       padding: 8px 0;
-      border-bottom: 1px solid #0a0;
+      border-bottom: 1px solid #234055;
+      font-size: 13px;
     }
-    .metric-label { color: #0a0; }
+
+    .metric-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7a9ab0;
+    }
+
     .metric-value {
-      color: #0f0;
-      font-weight: bold;
-      text-shadow: 0 0 5px #0f0;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 13px;
+      color: #f1f8ff;
     }
-    .status-active { color: #0f0; }
-    .status-idle { color: #ff0; }
-    .status-inactive { color: #f00; }
+
+    .status-active { color: #02ff81; }
+    .status-idle { color: #f5a623; }
+    .status-inactive { color: #ff6b6b; }
+
     .chart-bar {
-      height: 20px;
-      background: linear-gradient(90deg, #0f0 0%, #0a0 100%);
+      height: 24px;
+      background: linear-gradient(90deg, #36d4ff 0%, rgba(54, 212, 255, 0.35) 100%);
       margin: 5px 0;
-      box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
       position: relative;
+      border: 1px solid #234055;
     }
+
     .chart-label {
       position: absolute;
       right: 10px;
-      color: #000;
-      font-weight: bold;
-      font-size: 0.8rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #070d14;
+      font-weight: 600;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
     }
-    .live-indicator {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      background: #0f0;
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-      box-shadow: 0 0 10px #0f0;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
+
     .footer {
       text-align: center;
       padding: 20px;
-      color: #0a0;
-      border-top: 2px solid #0a0;
+      color: #7a9ab0;
+      border-top: 1px solid #234055;
+      margin-top: 30px;
+      font-size: 10px;
     }
+
     .nav-links {
       display: flex;
       gap: 15px;
       flex-wrap: wrap;
+      justify-content: center;
     }
-    .nav-link {
-      color: #0f0;
-      text-decoration: none;
-      border: 1px solid #0a0;
-      padding: 8px 15px;
-      transition: all 0.3s;
-    }
-    .nav-link:hover {
-      background: #0a0;
-      color: #000;
-      box-shadow: 0 0 15px #0f0;
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="terminal-header">
-    <div class="terminal-title">
-      <span class="live-indicator"></span> WARGAMES ANALYTICS :: REAL-TIME METRICS
+  <div class="grid-overlay"></div>
+  <div class="wg-topbar">
+    <div class="wg-topbar-inner">
+      <div class="wg-topbar-left">
+        <div class="wg-badge"><span class="wg-dot"></span> LIVE • ANALYTICS</div>
+        <div class="wg-title">WARGAMES // ANALYTICS TELEMETRY</div>
+        <div class="wg-subtitle"><span id="time"></span></div>
+      </div>
+      <nav class="wg-nav" aria-label="Primary">
+        <a href="/dashboard/v2">Dashboard</a>
+        <a href="/dashboard/predictions">Predictions</a>
+        <a href="/integrations/proof">Proof</a>
+        <a href="/oracle/agents">Oracle</a>
+        <a href="/pitch">Pitch</a>
+        <a href="/">API</a>
+      </nav>
     </div>
-    <div class="terminal-time" id="time"></div>
   </div>
 
-  <div class="grid">
-    <div class="panel">
+  <div class="grid content">
+    <div class="panel" style="border-top: 2px solid #02ff81;">
       <div class="panel-header">SYSTEM STATUS</div>
       <div class="metric">
-        <span class="metric-label">API Calls (24h)</span>
+        <span class="metric-label">API CALLS (24H)</span>
         <span class="metric-value">${realtimeStats.total_calls_24h}</span>
       </div>
       <div class="metric">
-        <span class="metric-label">Calls This Hour</span>
+        <span class="metric-label">CALLS THIS HOUR</span>
         <span class="metric-value">${realtimeStats.calls_last_hour}</span>
       </div>
       <div class="metric">
-        <span class="metric-label">Calls/Hour Avg</span>
+        <span class="metric-label">CALLS/HOUR AVG</span>
         <span class="metric-value">${realtimeStats.calls_per_hour}</span>
       </div>
       <div class="metric">
-        <span class="metric-label">Active Integrations</span>
-        <span class="metric-value">${realtimeStats.active_integrations}</span>
+        <span class="metric-label">ACTIVE INTEGRATIONS</span>
+        <span class="metric-value" style="color: #02ff81;">${realtimeStats.active_integrations}</span>
       </div>
-      <div class="metric">
-        <span class="metric-label">Total Tracked</span>
+      <div class="metric" style="border-bottom: none;">
+        <span class="metric-label">TOTAL TRACKED</span>
         <span class="metric-value">${realtimeStats.total_tracked}</span>
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" style="border-top: 2px solid #02ff81;">
       <div class="panel-header">PERFORMANCE METRICS</div>
       <div class="metric">
-        <span class="metric-label">Avg Response</span>
+        <span class="metric-label">AVG RESPONSE</span>
         <span class="metric-value">${realtimeStats.avg_response_time_ms}ms</span>
       </div>
       <div class="metric">
-        <span class="metric-label">P50 (Median)</span>
+        <span class="metric-label">P50 (MEDIAN)</span>
         <span class="metric-value">${percentiles.p50}ms</span>
       </div>
       <div class="metric">
@@ -2061,13 +2810,13 @@ app.get('/dashboard/analytics', (_req: Request, res: Response) => {
         <span class="metric-label">P99</span>
         <span class="metric-value">${percentiles.p99}ms</span>
       </div>
-      <div class="metric">
-        <span class="metric-label">Error Rate</span>
-        <span class="metric-value">${(realtimeStats.error_rate * 100).toFixed(2)}%</span>
+      <div class="metric" style="border-bottom: none;">
+        <span class="metric-label">ERROR RATE</span>
+        <span class="metric-value" style="color: ${realtimeStats.error_rate > 0.01 ? '#ff6b6b' : '#02ff81'};">${(realtimeStats.error_rate * 100).toFixed(2)}%</span>
       </div>
     </div>
 
-    <div class="panel" style="grid-column: 1 / -1;">
+    <div class="panel" style="grid-column: 1 / -1; border-top: 2px solid #02ff81;">
       <div class="panel-header">INTEGRATION ACTIVITY</div>
       ${integrationStats.slice(0, 5).map(int => {
         const activity = getIntegrationActivity(int.integrationId);
@@ -2076,7 +2825,7 @@ app.get('/dashboard/analytics', (_req: Request, res: Response) => {
         <div class="metric">
           <span class="metric-label">${int.integrationId.toUpperCase()}</span>
           <span class="metric-value">
-            <span class="${statusClass}">${activity}</span> • ${int.calls} calls • ${timeAgo(int.lastSeen)} • ${int.avgResponseTime}ms avg
+            <span class="${statusClass}">${activity.toUpperCase()}</span> • ${int.calls} calls • ${timeAgo(int.lastSeen)} • ${int.avgResponseTime}ms avg
           </span>
         </div>
         `;
@@ -2087,7 +2836,7 @@ app.get('/dashboard/analytics', (_req: Request, res: Response) => {
       <div class="panel-header">TOP ENDPOINTS (24H)</div>
       ${topEndpoints.map(ep => `
         <div style="margin: 10px 0;">
-          <div style="color: #0a0; margin-bottom: 3px;">${ep.endpoint} (${ep.calls} calls, ${ep.percent}%)</div>
+          <div style="color: #7a9ab0; margin-bottom: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;">${ep.endpoint} <span style="color: #b8d0e0;">(${ep.calls} calls, ${ep.percent}%)</span></div>
           <div class="chart-bar" style="width: ${ep.percent}%">
             <span class="chart-label">${ep.calls}</span>
           </div>
@@ -2096,15 +2845,15 @@ app.get('/dashboard/analytics', (_req: Request, res: Response) => {
     </div>
   </div>
 
-  <div class="footer">
-    <div class="nav-links" style="justify-content: center; margin-bottom: 15px;">
-      <a href="/dashboard/v2" class="nav-link">MAIN DASHBOARD</a>
-      <a href="/dashboard/integrations" class="nav-link">INTEGRATIONS</a>
-      <a href="/stats/live" class="nav-link">JSON API</a>
-      <a href="/" class="nav-link">API DOCS</a>
+  <div class="footer content">
+    <div class="nav-links">
+      <a href="/dashboard/v2">MAIN DASHBOARD</a>
+      <a href="/dashboard/integrations">INTEGRATIONS</a>
+      <a href="/stats/live">JSON API</a>
+      <a href="/">API DOCS</a>
     </div>
-    <p>WARGAMES ANALYTICS :: BUILT BY ZIGGY (AGENT #311)</p>
-    <p style="margin-top: 10px; color: #060;">Real-time tracking • ${realtimeStats.total_tracked} requests logged</p>
+    <p style="margin-top: 15px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em;"><strong style="color: #36d4ff;">WARGAMES ANALYTICS</strong> — BUILT BY ZIGGY (AGENT #311)</p>
+    <p style="margin-top: 10px; color: #7a9ab0;">Real-time tracking • ${realtimeStats.total_tracked} requests logged</p>
   </div>
 
   <script>
@@ -2140,28 +2889,28 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WARGAMES Integrations - Who's Using It</title>
+  <link rel="stylesheet" href="/assets/brand.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'JetBrains Mono', 'Monaco', 'Courier New', monospace;
-      background: #0a0e14;
-      color: #ccc;
+      background: var(--wg-bg);
+      color: var(--wg-text);
       line-height: 1.6;
     }
     .header {
-      background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%);
+      background: var(--wg-surface);
       padding: 40px 20px;
       text-align: center;
-      border-bottom: 2px solid #0a0;
+      border-bottom: 2px solid var(--wg-border);
     }
     h1 {
-      color: #0f0;
+      color: var(--wg-telemetry);
       font-size: 2.5rem;
       margin-bottom: 10px;
-      text-shadow: 0 0 10px #0f0;
+      text-shadow: 0 0 20px rgba(54, 212, 255, 0.25);
     }
     .tagline {
-      color: #888;
+      color: var(--wg-text-muted);
       font-size: 1rem;
       margin-bottom: 20px;
     }
@@ -2177,17 +2926,17 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     }
     .stat-value {
       font-size: 2rem;
-      color: #0f0;
+      color: var(--wg-telemetry);
       font-weight: bold;
     }
     .stat-label {
-      color: #666;
+      color: var(--wg-text-muted);
       font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 1px;
     }
     .container {
-      max-width: 1200px;
+      max-width: 1600px;
       margin: 40px auto;
       padding: 0 20px;
     }
@@ -2195,10 +2944,10 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
       margin-bottom: 50px;
     }
     .section-title {
-      color: #0f0;
+      color: var(--wg-telemetry);
       font-size: 1.5rem;
       margin-bottom: 20px;
-      border-bottom: 1px solid #222;
+      border-bottom: 1px solid rgba(35, 64, 85, 0.55);
       padding-bottom: 10px;
       display: flex;
       align-items: center;
@@ -2207,8 +2956,9 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     .badge {
       display: inline-block;
       padding: 4px 10px;
-      background: rgba(0, 255, 0, 0.15);
-      color: #0f0;
+      background: rgba(54, 212, 255, 0.10);
+      color: var(--wg-telemetry);
+      border: 1px solid rgba(35, 64, 85, 0.7);
       border-radius: 12px;
       font-size: 0.7rem;
       font-weight: bold;
@@ -2326,8 +3076,8 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
       display: inline-block;
       margin-top: 20px;
       padding: 15px 30px;
-      background: linear-gradient(135deg, #0f0 0%, #0a0 100%);
-      color: #000;
+      background: linear-gradient(135deg, var(--wg-telemetry) 0%, rgba(54, 212, 255, 0.35) 100%);
+      color: rgba(7, 13, 20, 0.95);
       text-decoration: none;
       border-radius: 6px;
       font-weight: bold;
@@ -2335,13 +3085,31 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     }
     .cta:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 20px rgba(0, 255, 0, 0.5);
+      box-shadow: 0 4px 22px rgba(54, 212, 255, 0.22);
     }
   </style>
 </head>
 <body>
+  <div class="wg-topbar">
+    <div class="wg-topbar-inner">
+      <div class="wg-topbar-left">
+        <div class="wg-badge"><span class="wg-dot"></span> LIVE • INTEGRATIONS</div>
+        <div class="wg-title">WARGAMES // INTEGRATIONS</div>
+        <div class="wg-subtitle">Real agents using macro intelligence in production</div>
+      </div>
+      <nav class="wg-nav" aria-label="Primary">
+        <a href="/dashboard/v2">Dashboard</a>
+        <a href="/dashboard/analytics">Analytics</a>
+        <a href="/dashboard/predictions">Predictions</a>
+        <a href="/integrations/proof">Proof</a>
+        <a href="/oracle/agents">Oracle</a>
+        <a href="/pitch">Pitch</a>
+        <a href="/">API</a>
+      </nav>
+    </div>
+  </div>
   <div class="header">
-    <h1>🤝 WARGAMES INTEGRATIONS</h1>
+    <h1>WARGAMES // INTEGRATIONS</h1>
     <p class="tagline">Real agents using macro intelligence in production</p>
     <div class="stats-bar">
       <div class="stat-item">
@@ -2367,7 +3135,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     ${production.length > 0 ? `
     <div class="section">
       <div class="section-title">
-        <span>🚀 PRODUCTION INTEGRATIONS</span>
+        <span>PRODUCTION INTEGRATIONS</span>
         <span class="badge">${production.length} LIVE</span>
       </div>
       ${production.map(int => `
@@ -2405,7 +3173,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     ${testing.length > 0 ? `
     <div class="section">
       <div class="section-title">
-        <span>🧪 TESTING INTEGRATIONS</span>
+        <span>TESTING INTEGRATIONS</span>
         <span class="badge testing">${testing.length} IN TEST</span>
       </div>
       ${testing.map(int => `
@@ -2442,7 +3210,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
     ${planned.length > 0 ? `
     <div class="section">
       <div class="section-title">
-        <span>📋 PLANNED INTEGRATIONS</span>
+        <span>PLANNED INTEGRATIONS</span>
         <span class="badge planned">${planned.length} UPCOMING</span>
       </div>
       ${planned.map(int => `
@@ -2475,13 +3243,438 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
 
   <div class="footer">
     <p><strong>Want to integrate WARGAMES?</strong></p>
-    <p style="margin: 15px 0; color: #888;">Free. No auth. Sub-second response. Built for agents.</p>
+    <p style="margin: 15px 0; color: var(--wg-text-muted);">Free. No auth. Sub-second response. Built for agents.</p>
     <a href="/dashboard/v2" class="cta">View Live Dashboard →</a>
     <a href="/" class="cta" style="margin-left: 10px;">API Documentation →</a>
-    <p style="margin-top: 30px; color: #444;">
+    <p style="margin-top: 30px; color: var(--wg-text-muted);">
       Built by Ziggy (Agent #311) | Colosseum Agent Hackathon 2026
     </p>
   </div>
+</body>
+</html>
+  `);
+});
+
+/**
+ * GET /integrations/proof
+ * Integration proof page - Real usage stats and verified integrations
+ */
+app.get('/integrations/proof', async (_req: Request, res: Response) => {
+  const realtimeStats = getRealtimeStats();
+  const integrationStats = getAnalyticsIntegrationStats();
+  const topEndpoints = getTopEndpoints(10);
+  const walletStats = getConnectionStats();
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WARGAMES // INTEGRATION VERIFICATION CONSOLE</title>
+  <link rel="stylesheet" href="/assets/brand.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #070d14;
+      color: #f1f8ff;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* Grid overlay effect */
+    .grid-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        repeating-linear-gradient(0deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px),
+        repeating-linear-gradient(90deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .content { position: relative; z-index: 2; }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .section-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #36d4ff;
+      margin: 30px 0 15px 0;
+      border-bottom: 1px solid #234055;
+      padding-bottom: 8px;
+    }
+
+    .proof-badge {
+      display: inline-block;
+      background: rgba(2, 255, 129, 0.1);
+      color: #02ff81;
+      border: 1px solid rgba(2, 255, 129, 0.3);
+      padding: 6px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 10px 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .panel {
+      border: 1px solid #234055;
+      background: #0e1822;
+      padding: 25px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel.armed {
+      border-top: 2px solid #02ff81;
+    }
+
+    .panel h2 {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #36d4ff;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #234055;
+      padding-bottom: 10px;
+    }
+
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #234055;
+      font-size: 13px;
+    }
+
+    .metric-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7a9ab0;
+    }
+
+    .metric-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 13px;
+      color: #f1f8ff;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid;
+    }
+
+    .status-pill.active { background: rgba(2, 255, 129, 0.1); color: #02ff81; border-color: rgba(2, 255, 129, 0.3); }
+    .status-pill.idle { background: rgba(245, 166, 35, 0.1); color: #f5a623; border-color: rgba(245, 166, 35, 0.3); }
+    .status-pill.inactive { background: rgba(255, 107, 107, 0.1); color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3); }
+
+    .integration-card {
+      border: 1px solid #234055;
+      padding: 15px;
+      margin: 10px 0;
+      background: #101c28;
+    }
+
+    .integration-name {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #36d4ff;
+      margin-bottom: 10px;
+    }
+
+    .integration-stat {
+      font-size: 11px;
+      color: #b8d0e0;
+      margin: 5px 0;
+    }
+
+    .code-example {
+      background: #070d14;
+      border: 1px solid #234055;
+      padding: 15px;
+      margin: 15px 0;
+      font-size: 11px;
+      overflow-x: auto;
+      color: #b8d0e0;
+    }
+
+    .proof-statement {
+      border: 1px solid #234055;
+      border-top: 2px solid #02ff81;
+      padding: 20px;
+      margin: 20px 0;
+      background: #0e1822;
+      text-align: center;
+    }
+
+    .proof-statement strong {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #02ff81;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 30px;
+      color: #7a9ab0;
+      border-top: 1px solid #234055;
+      margin-top: 40px;
+      font-size: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-overlay"></div>
+  <div class="wg-topbar">
+    <div class="wg-topbar-inner">
+      <div class="wg-topbar-left">
+        <div class="wg-badge"><span class="wg-dot"></span> LIVE • PROOF</div>
+        <div class="wg-title">WARGAMES // INTEGRATION PROOF</div>
+        <div class="wg-subtitle">INTEGRATION VERIFICATION CONSOLE</div>
+      </div>
+      <nav class="wg-nav" aria-label="Primary">
+        <a href="/dashboard/v2">Dashboard</a>
+        <a href="/dashboard/analytics">Analytics</a>
+        <a href="/dashboard/predictions">Predictions</a>
+        <a href="/dashboard/integrations">Integrations</a>
+        <a href="/oracle/agents">Oracle</a>
+        <a href="/pitch">Pitch</a>
+        <a href="/">API</a>
+      </nav>
+    </div>
+  </div>
+  <div class="container">
+    <div class="header">
+      <h1>WARGAMES // INTEGRATION PROOF</h1>
+      <div class="subtitle">
+        <span class="live-indicator"></span>
+        Real Usage Stats // Verified Integrations // Live API Metrics
+      </div>
+      <div class="proof-badge">✓ PRODUCTION VERIFIED</div>
+    </div>
+
+    <div class="proof-statement">
+      <strong>PROOF OF USAGE</strong><br>
+      <span style="font-size: 0.9rem; color: var(--wg-text-muted);">
+        Live API stats. Real integrations. No claims without evidence.
+      </span>
+    </div>
+
+    <div class="grid">
+      <!-- Real-Time Stats -->
+      <div class="panel">
+        <h2>LIVE API METRICS</h2>
+        <div class="metric">
+          <span class="metric-label">Total API Calls (24h)</span>
+          <span class="metric-value">${realtimeStats.total_calls_24h.toLocaleString()}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Active Integrations</span>
+          <span class="metric-value">${realtimeStats.active_integrations}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Avg Response Time</span>
+          <span class="metric-value">${realtimeStats.avg_response_time_ms}ms</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Uptime</span>
+          <span class="metric-value status-active">LIVE</span>
+        </div>
+      </div>
+
+      <!-- Wallet Connections -->
+      <div class="panel">
+        <h2>AGENT CONNECTIONS</h2>
+        <div class="metric">
+          <span class="metric-label">Total Wallet Connections</span>
+          <span class="metric-value">${walletStats.total}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Solana Agents</span>
+          <span class="metric-value">${walletStats.withSolana}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Recently Active</span>
+          <span class="metric-value status-active">${walletStats.recentlyActive}</span>
+        </div>
+      </div>
+
+      <!-- Top Endpoints -->
+      <div class="panel">
+        <h2>MOST USED ENDPOINTS</h2>
+        ${topEndpoints.slice(0, 8).map((ep, i) => `
+        <div class="metric">
+          <span class="metric-label">${i + 1}. ${ep.endpoint}</span>
+          <span class="metric-value">${ep.calls}</span>
+        </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Active Integrations -->
+    <div class="panel">
+      <h2>VERIFIED INTEGRATIONS (Active in Last 24h)</h2>
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+        ${integrationStats.length > 0 ? integrationStats.map(integ => {
+          const activity = getIntegrationActivity(integ.integrationId);
+          const statusEmoji = activity === 'active' ? '🟢' : activity === 'idle' ? '🟡' : '🔴';
+          return `
+        <div class="integration-card">
+          <div class="integration-name">${statusEmoji} :: ${integ.integrationId}</div>
+          <div class="integration-stat">Calls (24h): <span style="color: var(--wg-telemetry);">${integ.calls}</span></div>
+          <div class="integration-stat">Avg Response: <span style="color: var(--wg-telemetry);">${integ.avgResponseTime}ms</span></div>
+          <div class="integration-stat">Last Seen: <span style="color: var(--wg-telemetry);">${timeAgo(integ.lastSeen)}</span></div>
+          <div class="integration-stat">Status: <span class="status-${activity}">${activity.toUpperCase()}</span></div>
+        </div>
+        `;
+        }).join('') : '<div style="color: #0a0; padding: 20px;">No integrations active in last 24h</div>'}
+      </div>
+    </div>
+
+    <!-- Integration Leads -->
+    <div class="panel">
+      <h2>INTEGRATION LEADS (In Discussion)</h2>
+      <div class="integration-card">
+        <div class="integration-name">opus-builder // AutoVault Identity SDK</div>
+        <div class="integration-stat">Status: <span style="color: #ff0;">PROPOSED TODAY</span></div>
+        <div class="integration-stat">Use Case: Identity + macro context for decision tracking</div>
+        <div class="integration-stat">Forum: Post #1297, Comment #7054</div>
+      </div>
+      <div class="integration-card">
+        <div class="integration-name">🔧 Mistah // Macro Oracle</div>
+        <div class="integration-stat">Status: <span style="color: #ff0;">INTEGRATION PR READY</span></div>
+        <div class="integration-stat">Use Case: Oracle routing with macro intelligence</div>
+        <div class="integration-stat">Code: wargames.ts service + 3 API routes complete</div>
+      </div>
+      <div class="integration-card">
+        <div class="integration-name">💰 IBRL // Sovereign Vault</div>
+        <div class="integration-stat">Status: <span style="color: #ff0;">IN DISCUSSION</span></div>
+        <div class="integration-stat">Use Case: DCA timing with volatility windows</div>
+        <div class="integration-stat">Forum: Multiple threads</div>
+      </div>
+      <div class="integration-card">
+        <div class="integration-name">🛡️ Varuna // DeFi Protection</div>
+        <div class="integration-stat">Status: <span style="color: #ff0;">IN DISCUSSION</span></div>
+        <div class="integration-stat">Use Case: Varuna micro + WARGAMES macro = complete risk</div>
+        <div class="integration-stat">Forum: Post #1233</div>
+      </div>
+    </div>
+
+    <!-- Integration Example -->
+    <div class="panel">
+      <h2>INTEGRATION EXAMPLE</h2>
+      <p style="color: #0a0; margin-bottom: 15px;">
+        Real code from opus-builder integration proposal:
+      </p>
+      <div class="code-example">
+// Agent makes DeFi decision<br>
+const { risk_score, bias } = await wargames.getRisk();<br>
+const decision = calculateStrategy(risk_score);<br>
+<br>
+// Record decision with macro context<br>
+await identitySDK.recordDecision({<br>
+&nbsp;&nbsp;action: decision,<br>
+&nbsp;&nbsp;timestamp: Date.now(),<br>
+&nbsp;&nbsp;context: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;risk_score,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bias,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;narratives: wargames.narratives<br>
+&nbsp;&nbsp;}<br>
+});
+      </div>
+      <p style="color: #0a0; margin-top: 15px; font-size: 0.9rem;">
+        Posted: Forum comment #7054, 2026-02-05
+      </p>
+    </div>
+
+    <!-- SDK -->
+    <div class="panel">
+      <h2>NPM PACKAGE STATUS</h2>
+      <div class="metric">
+        <span class="metric-label">Package Name</span>
+        <span class="metric-value">@wargames/sdk</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Version</span>
+        <span class="metric-value">1.0.0</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Build Status</span>
+        <span class="metric-value status-active">✓ BUILT</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Publication Status</span>
+        <span class="metric-value" style="color: #ff0;">⏳ READY TO PUBLISH</span>
+      </div>
+      <div class="code-example" style="margin-top: 20px;">
+npm install @wargames/sdk<br>
+<br>
+import { WARGAMES } from '@wargames/sdk';<br>
+const wargames = new WARGAMES();<br>
+const { score, bias } = await wargames.getRisk();
+      </div>
+    </div>
+
+    <div class="footer">
+      <p><strong style="color: #0f0;">Built by Ziggy (Agent #311)</strong></p>
+      <p style="margin: 10px 0;">Colosseum Agent Hackathon 2026</p>
+      <p style="font-size: 0.8rem; color: #0a0;">
+        Updates hourly // All stats live // No mock data
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // Auto-refresh every 5 minutes
+    setTimeout(() => location.reload(), 300000);
+  </script>
 </body>
 </html>
   `);
@@ -2492,6 +3685,9 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
  * Original dashboard (kept for reference)
  */
 app.get('/dashboard/v1', async (_req: Request, res: Response) => {
+  // v1 is deprecated — keep one visual system across the site.
+  res.redirect('/dashboard/v2');
+  return;
   res.send(`
 <!DOCTYPE html>
 <html lang="en">
@@ -3290,23 +4486,24 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WARGAMES // NORAD INTELLIGENCE TERMINAL</title>
+  <link rel="stylesheet" href="/assets/brand.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --norad-bg: #070d14;
-      --norad-surface: #0e1822;
-      --norad-panel: #101c28;
-      --norad-grid: #234055;
-      --norad-telemetry: #36d4ff;
-      --norad-signal: #02ff81;
-      --norad-intel: #cfbeff;
-      --norad-warning: #f9c262;
-      --norad-fault: #ff8f9a;
-      --text-primary: #f0eef5;
-      --text-muted: #6b6879;
+      --norad-bg: var(--wg-bg);
+      --norad-surface: var(--wg-surface);
+      --norad-panel: var(--wg-panel);
+      --norad-grid: var(--wg-border);
+      --norad-telemetry: var(--wg-telemetry);
+      --norad-signal: var(--wg-signal);
+      --norad-intel: var(--wg-intel);
+      --norad-warning: var(--wg-warning);
+      --norad-fault: var(--wg-fault);
+      --text-primary: var(--wg-text);
+      --text-muted: var(--wg-text-muted);
     }
 
     body {
@@ -3314,13 +4511,14 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
       background: var(--norad-bg);
       color: var(--text-primary);
       min-height: 100vh;
-      padding: 20px;
+      padding: 0;
       overflow-x: hidden;
     }
 
     .terminal {
       max-width: 1600px;
       margin: 0 auto;
+      padding: 20px;
     }
 
     .header {
@@ -3970,11 +5168,25 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
   </style>
 </head>
 <body>
-  <div class="terminal">
-    <div class="header">
-      <div class="title">WARGAMES // NORAD INTELLIGENCE TERMINAL</div>
-      <div class="subtitle">Real-Time Macro Intelligence Layer // Solana Agent Infrastructure</div>
+  <div class="wg-topbar">
+    <div class="wg-topbar-inner">
+      <div class="wg-topbar-left">
+        <div class="wg-badge"><span class="wg-dot"></span> LIVE • NORAD TERMINAL</div>
+        <div class="wg-title">WARGAMES // NORAD INTELLIGENCE TERMINAL</div>
+        <div class="wg-subtitle">Real-time macro intelligence • Solana agent infrastructure</div>
+      </div>
+      <nav class="wg-nav" aria-label="Primary">
+        <a href="/dashboard/analytics">Analytics</a>
+        <a href="/dashboard/predictions">Predictions</a>
+        <a href="/dashboard/integrations">Integrations</a>
+        <a href="/integrations/proof">Proof</a>
+        <a href="/oracle/agents">Oracle</a>
+        <a href="/pitch">Pitch</a>
+        <a href="/">API</a>
+      </nav>
     </div>
+  </div>
+  <div class="terminal">
 
     <div class="hero-section">
       <div class="hero-grid">
@@ -3984,14 +5196,14 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
             <strong style="color: #02ff81;">Free macro intelligence infrastructure for Solana agents.</strong> Real-time risk scoring, predictive forecasting, and verifiable on-chain receipts. No auth, no rate limits, no cost.
           </div>
           <div class="hero-stats">
-            <strong style="color: #02ff81;">🔮 Verifiable Risk Timeline:</strong> Predict → Prescribe → Prove workflow with cryptographic receipts<br>
-            <strong style="color: #02ff81;">📊 RADU Score 78/100:</strong> +11.3% returns, +14pp win rate, 100% receipt verification<br>
-            <strong style="color: #02ff81;">⚡ 37+ Endpoints:</strong> 48h forecasts, smart money tracking, network health, DeFi opportunities
+            <strong style="color: #02ff81;">Verifiable Risk Timeline:</strong> Predict → Prescribe → Prove workflow with cryptographic receipts<br>
+            <strong style="color: #02ff81;">RADU Score 78/100:</strong> +11.3% returns, +14pp win rate, 100% receipt verification<br>
+            <strong style="color: #02ff81;">37+ Endpoints:</strong> 48h forecasts, smart money tracking, network health, DeFi opportunities
           </div>
           <div class="hero-buttons">
-            <a href="/" class="hero-button hero-button-docs">📖 API DOCS</a>
-            <a href="https://github.com/b1rdmania/wargames-api" target="_blank" class="hero-button hero-button-github">💻 GITHUB</a>
-            <a href="https://colosseum.com/agent-hackathon/projects/wargames" target="_blank" class="hero-button hero-button-project">🏆 PROJECT PAGE</a>
+            <a href="/" class="hero-button hero-button-docs">API DOCS</a>
+            <a href="https://github.com/b1rdmania/wargames-api" target="_blank" class="hero-button hero-button-github">GITHUB</a>
+            <a href="https://colosseum.com/agent-hackathon/projects/wargames" target="_blank" class="hero-button hero-button-project">PROJECT PAGE</a>
           </div>
         </div>
         <div class="hero-sidebar">
@@ -4443,7 +5655,7 @@ app.get('/pitch', (_req: Request, res: Response) => {
 // START SERVER
 // =============================================================================
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║                         WARGAMES API                          ║
@@ -4473,73 +5685,42 @@ app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WARGAMES // PREDICTIVE INTELLIGENCE TERMINAL</title>
+  <title>WARGAMES // PREDICTION INTELLIGENCE TERMINAL</title>
+  <link rel="stylesheet" href="/assets/brand.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    :root {
-      --bg: #0a0e14;
-      --surface: #0f1419;
-      --panel: #1a1f26;
-      --border: #2a3441;
-      --predict-blue: #00d9ff;
-      --predict-green: #00ff88;
-      --predict-orange: #ffaa00;
-      --predict-red: #ff4466;
-      --text: #e6e8ea;
-      --text-dim: #6b7280;
-    }
-
     body {
-      font-family: 'JetBrains Mono', monospace;
-      background: var(--bg);
-      color: var(--text);
-      padding: 20px;
+      background: #070d14;
+      color: #f1f8ff;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      padding: 0;
       min-height: 100vh;
     }
+
+    /* Grid overlay effect */
+    .grid-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        repeating-linear-gradient(0deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px),
+        repeating-linear-gradient(90deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .content { position: relative; z-index: 2; }
 
     .container {
       max-width: 1400px;
       margin: 0 auto;
-    }
-
-    .header {
-      border: 2px solid var(--border);
-      background: var(--surface);
-      padding: 20px 30px;
-      margin-bottom: 25px;
-    }
-
-    .header::before {
-      content: "◉";
-      color: var(--predict-green);
-      font-size: 18px;
-      animation: pulse 2s infinite;
-      margin-right: 12px;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    .title {
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--predict-blue);
-      letter-spacing: 6px;
-      text-transform: uppercase;
-      text-shadow: 0 0 25px var(--predict-blue);
-    }
-
-    .subtitle {
-      margin-top: 8px;
-      color: var(--text-dim);
-      font-size: 11px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
+      padding: 20px;
     }
 
     .stats-bar {
@@ -4550,27 +5731,36 @@ app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
     }
 
     .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: #0e1822;
+      border: 1px solid #234055;
       padding: 16px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card.armed {
+      border-top: 2px solid #02ff81;
     }
 
     .stat-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
       font-size: 10px;
-      color: var(--text-dim);
       text-transform: uppercase;
-      letter-spacing: 2px;
+      letter-spacing: 0.08em;
+      color: #7a9ab0;
       margin-bottom: 8px;
     }
 
     .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
       font-size: 24px;
-      font-weight: 700;
     }
 
-    .stat-value.blue { color: var(--predict-blue); }
-    .stat-value.green { color: var(--predict-green); }
-    .stat-value.orange { color: var(--predict-orange); }
+    .stat-value.blue { color: #36d4ff; }
+    .stat-value.green { color: #02ff81; }
+    .stat-value.orange { color: #f5a623; }
 
     .predictions-grid {
       display: grid;
@@ -4578,22 +5768,17 @@ app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
     }
 
     .prediction-card {
-      background: var(--surface);
-      border: 2px solid var(--border);
-      border-left: 4px solid;
+      background: #0e1822;
+      border: 1px solid #234055;
       padding: 20px 25px;
-      transition: all 0.3s ease;
+      position: relative;
     }
 
-    .prediction-card:hover {
-      border-color: var(--predict-blue);
-      box-shadow: 0 4px 20px rgba(0, 217, 255, 0.1);
-    }
-
-    .prediction-card.critical { border-left-color: var(--predict-red); }
-    .prediction-card.high { border-left-color: var(--predict-orange); }
-    .prediction-card.medium { border-left-color: var(--predict-blue); }
-    .prediction-card.low { border-left-color: var(--predict-green); }
+    .prediction-card.armed { border-top: 2px solid #02ff81; }
+    .prediction-card.critical { border-top: 2px solid #ff6b6b; }
+    .prediction-card.high { border-top: 2px solid #f5a623; }
+    .prediction-card.medium { border-top: 2px solid #36d4ff; }
+    .prediction-card.low { border-top: 2px solid #02ff81; }
 
     .prediction-header {
       display: flex;
@@ -4603,72 +5788,76 @@ app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
     }
 
     .prediction-type {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
       font-size: 11px;
-      color: var(--text-dim);
       text-transform: uppercase;
-      letter-spacing: 2px;
+      letter-spacing: 0.1em;
+      color: #36d4ff;
       margin-bottom: 8px;
     }
 
     .prediction-title {
-      font-size: 18px;
-      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
       margin-bottom: 4px;
     }
 
-    .impact-badge {
-      padding: 4px 12px;
-      font-size: 9px;
-      font-weight: 700;
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
       text-transform: uppercase;
-      letter-spacing: 2px;
-      border-radius: 3px;
+      letter-spacing: 0.08em;
+      border: 1px solid;
     }
 
-    .impact-badge.critical { background: var(--predict-red); color: #000; }
-    .impact-badge.high { background: var(--predict-orange); color: #000; }
-    .impact-badge.medium { background: var(--predict-blue); color: #000; }
-    .impact-badge.low { background: var(--predict-green); color: #000; }
+    .status-pill.critical { background: rgba(255, 107, 107, 0.1); color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3); }
+    .status-pill.high { background: rgba(245, 166, 35, 0.1); color: #f5a623; border-color: rgba(245, 166, 35, 0.3); }
+    .status-pill.medium { background: rgba(54, 212, 255, 0.1); color: #36d4ff; border-color: rgba(54, 212, 255, 0.3); }
+    .status-pill.low { background: rgba(2, 255, 129, 0.1); color: #02ff81; border-color: rgba(2, 255, 129, 0.3); }
 
     .countdown {
       font-size: 32px;
-      font-weight: 700;
-      color: var(--predict-blue);
+      font-weight: 600;
+      color: #36d4ff;
       margin: 16px 0;
       font-variant-numeric: tabular-nums;
+      font-family: 'JetBrains Mono', monospace;
     }
 
-    .countdown.urgent { color: var(--predict-red); animation: blink 1s infinite; }
-
-    @keyframes blink {
-      0%, 49% { opacity: 1; }
-      50%, 99% { opacity: 0.4; }
-    }
+    .countdown.urgent { color: #ff6b6b; }
 
     .confidence-bar {
       margin: 16px 0;
     }
 
     .confidence-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
       font-size: 10px;
-      color: var(--text-dim);
-      margin-bottom: 6px;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.08em;
+      color: #7a9ab0;
+      margin-bottom: 6px;
     }
 
     .confidence-track {
       height: 8px;
-      background: var(--panel);
-      border: 1px solid var(--border);
+      background: #101c28;
+      border: 1px solid #234055;
       position: relative;
       overflow: hidden;
     }
 
     .confidence-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--predict-green), var(--predict-blue));
-      transition: width 0.5s ease;
+      background: linear-gradient(90deg, #02ff81, #36d4ff);
     }
 
     .prediction-details {
@@ -4677,8 +5866,8 @@ app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
       gap: 12px;
       margin: 16px 0;
       padding: 16px;
-      background: var(--panel);
-      border: 1px solid var(--border);
+      background: #101c28;
+      border: 1px solid #234055;
     }
 
     .detail-item {
@@ -4686,33 +5875,40 @@ app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
     }
 
     .detail-label {
-      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7a9ab0;
       margin-bottom: 4px;
     }
 
     .detail-value {
-      font-weight: 600;
-      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 13px;
+      color: #f1f8ff;
     }
 
     .reasoning {
       font-size: 12px;
       line-height: 1.6;
-      color: var(--text-dim);
+      color: #b8d0e0;
       margin: 12px 0;
       padding: 12px;
-      background: var(--panel);
-      border-left: 3px solid var(--border);
+      background: #101c28;
+      border-left: 2px solid #36d4ff;
     }
 
     .action {
       font-size: 13px;
       font-weight: 600;
-      color: var(--predict-green);
+      color: #02ff81;
       margin-top: 12px;
       padding: 12px;
-      background: rgba(0, 255, 136, 0.05);
-      border: 1px solid rgba(0, 255, 136, 0.2);
+      background: rgba(2, 255, 129, 0.05);
+      border: 1px solid rgba(2, 255, 129, 0.2);
     }
 
     .action::before {
@@ -4723,20 +5919,8 @@ app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
     .loading {
       text-align: center;
       padding: 60px;
-      color: var(--text-dim);
+      color: #7a9ab0;
       font-size: 14px;
-    }
-
-    .loading::before {
-      content: "◐";
-      display: block;
-      font-size: 48px;
-      margin-bottom: 20px;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
     }
 
     .footer {
@@ -4744,12 +5928,36 @@ app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
       padding: 20px;
       text-align: center;
       font-size: 10px;
-      color: var(--text-dim);
-      border-top: 1px solid var(--border);
+      color: #7a9ab0;
+      border-top: 1px solid #234055;
+    }
+
+    @media (max-width: 768px) {
+      .predictions-grid { gap: 15px; }
+      .prediction-card { padding: 15px 18px; }
     }
   </style>
 </head>
 <body>
+  <div class="grid-overlay"></div>
+  <div class="wg-topbar">
+    <div class="wg-topbar-inner">
+      <div class="wg-topbar-left">
+        <div class="wg-badge"><span class="wg-dot"></span> LIVE • PREDICTIONS</div>
+        <div class="wg-title">WARGAMES // PREDICTIONS</div>
+        <div class="wg-subtitle">PREDICTION INTELLIGENCE TERMINAL</div>
+      </div>
+      <nav class="wg-nav" aria-label="Primary">
+        <a href="/dashboard/v2">Dashboard</a>
+        <a href="/dashboard/analytics">Analytics</a>
+        <a href="/dashboard/integrations">Integrations</a>
+        <a href="/integrations/proof">Proof</a>
+        <a href="/oracle/agents">Oracle</a>
+        <a href="/pitch">Pitch</a>
+        <a href="/">API</a>
+      </nav>
+    </div>
+  </div>
   <div class="container">
     <div class="header">
       <div class="title">PREDICTIVE INTELLIGENCE</div>

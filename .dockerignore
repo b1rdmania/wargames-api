@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.env
+.env.local
+.vercel
+*.log
+.DS_Store
+
+# Anchor / Rust
+target/
+.anchor/
+test-ledger/
+.DS_Store
+**/.DS_Store
+programs/**/*.so
+programs/**/*.so.*
+*.swp
+*.swo
+*~

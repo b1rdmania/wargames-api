@@ -9,35 +9,36 @@ export const raduDashboardHTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WARGAMES // RADU PERFORMANCE TERMINAL</title>
+  <link rel="stylesheet" href="/assets/brand.css">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg: #070d14;
-      --surface: #0e1822;
-      --panel: #101c28;
-      --grid: #234055;
-      --accent: #36d4ff;
-      --success: #02ff81;
-      --warning: #f9c262;
-      --error: #ff8f9a;
-      --text: #f0eef5;
-      --muted: #6b6879;
+      /* Map legacy RADU tokens → v2 brand tokens */
+      --bg: var(--wg-bg);
+      --surface: var(--wg-surface);
+      --panel: var(--wg-panel);
+      --grid: var(--wg-border);
+      --accent: var(--wg-telemetry);
+      --success: var(--wg-signal);
+      --warning: var(--wg-warning);
+      --error: var(--wg-fault);
+      --text: var(--wg-text);
+      --muted: var(--wg-text-muted);
     }
 
     body {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 20px;
+      padding: 0;
     }
 
     .container {
       max-width: 1800px;
       margin: 0 auto;
+      padding: 20px;
     }
 
     .header {
@@ -199,10 +200,37 @@ export const raduDashboardHTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
+  <div class="wg-topbar">
+    <div class="wg-topbar-inner">
+      <div class="wg-topbar-left">
+        <div class="wg-badge"><span class="wg-dot"></span> LIVE • RADU</div>
+        <div class="wg-title">WARGAMES // RADU PERFORMANCE</div>
+        <div class="wg-subtitle">Risk-adjusted decision uplift • receipts • evaluation</div>
+      </div>
+      <nav class="wg-nav" aria-label="Primary">
+        <a href="/dashboard/v2">Dashboard</a>
+        <a href="/dashboard/analytics">Analytics</a>
+        <a href="/dashboard/predictions">Predictions</a>
+        <a href="/dashboard/integrations">Integrations</a>
+        <a href="/integrations/proof">Proof</a>
+        <a href="/oracle/agents">Oracle</a>
+        <a href="/pitch">Pitch</a>
+        <a href="/">API</a>
+      </nav>
+    </div>
+  </div>
   <div class="container">
     <div class="header">
-      <div class="title">RADU PERFORMANCE</div>
+      <div class="title">WARGAMES // RADU PERFORMANCE</div>
       <div class="subtitle"><span class="live-indicator"></span>Risk-Adjusted Decision Uplift // Verifiable On-Chain Proof</div>
+      <nav style="margin-top: 15px; font-size: 10px;">
+        <a href="/pitch" style="color: #0f0; margin: 0 10px; text-decoration: none;">PITCH</a>
+        <a href="/dashboard/v2" style="color: #0f0; margin: 0 10px; text-decoration: none;">DASHBOARD</a>
+        <a href="/dashboard/analytics" style="color: #0f0; margin: 0 10px; text-decoration: none;">ANALYTICS</a>
+        <a href="/dashboard/predictions" style="color: #0f0; margin: 0 10px; text-decoration: none;">PREDICTIONS</a>
+        <a href="/integrations/proof" style="color: #0f0; margin: 0 10px; text-decoration: none;">PROOF</a>
+        <a href="/" style="color: #0f0; margin: 0 10px; text-decoration: none;">API</a>
+      </nav>
     </div>
 
     <div class="grid">
