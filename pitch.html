@@ -34,7 +34,7 @@
             width: 90%;
             max-width: 1200px;
             height: 85vh;
-            padding: 60px;
+            padding: 40px 50px;
             background: var(--wg-surface);
             border: 2px solid var(--wg-border);
             box-shadow: 0 0 30px rgba(54, 212, 255, 0.12);
@@ -55,50 +55,50 @@
 
         .terminal-header {
             border-bottom: 2px solid var(--wg-border);
-            padding-bottom: 20px;
-            margin-bottom: 40px;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
         }
 
         .terminal-title {
-            font-size: 3rem;
+            font-size: 2.5rem;
             color: var(--wg-telemetry);
             text-shadow: 0 0 18px rgba(54, 212, 255, 0.35);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .terminal-subtitle {
-            font-size: 1.5rem;
+            font-size: 1.1rem;
             color: var(--wg-text-muted);
         }
 
         .terminal-tagline {
-            font-size: 1rem;
+            font-size: 0.9rem;
             color: var(--wg-text-muted);
-            margin-top: 20px;
-            padding: 15px;
+            margin-top: 15px;
+            padding: 12px;
             border-left: 3px solid var(--wg-telemetry);
             background: rgba(54, 212, 255, 0.06);
         }
 
         h2 {
             color: var(--wg-telemetry);
-            font-size: 2rem;
-            margin: 30px 0 20px 0;
+            font-size: 1.5rem;
+            margin: 20px 0 12px 0;
             text-shadow: 0 0 12px rgba(54, 212, 255, 0.25);
         }
 
         h3 {
             color: var(--wg-text);
-            font-size: 1.3rem;
-            margin: 20px 0 10px 0;
+            font-size: 1.1rem;
+            margin: 15px 0 8px 0;
         }
 
         .code-block {
             background: rgba(7, 13, 20, 0.75);
             border: 1px solid rgba(35, 64, 85, 0.8);
-            padding: 20px;
-            margin: 20px 0;
-            font-size: 0.9rem;
+            padding: 12px 15px;
+            margin: 12px 0;
+            font-size: 0.8rem;
             overflow-x: auto;
         }
 
@@ -108,27 +108,27 @@
 
         .metric-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
         }
 
         .metric-box {
             border: 1px solid var(--wg-border);
-            padding: 20px;
+            padding: 15px;
             background: rgba(54, 212, 255, 0.05);
         }
 
         .metric-value {
-            font-size: 2.5rem;
+            font-size: 2rem;
             color: var(--wg-telemetry);
             text-shadow: 0 0 18px rgba(54, 212, 255, 0.3);
         }
 
         .metric-label {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             color: var(--wg-text-muted);
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         .feature-list {
@@ -304,80 +304,102 @@
             </div>
 
             <h2>PROBLEM</h2>
-            <p style="font-size: 1.3rem; line-height: 1.6; margin-bottom: 30px; color: #f1f8ff;">
+            <p style="font-size: 1.1rem; line-height: 1.4; margin-bottom: 18px; color: #f1f8ff;">
                 Agents see prices. Not the world.
             </p>
-            <p style="font-size: 1.1rem; line-height: 1.5; margin-bottom: 30px;">
-                Trading agents get wrecked during FOMC spikes. Treasury bots miss rotation signals. DeFi agents ignore systemic risk.
-            </p>
-            <p style="font-size: 1.05rem; line-height: 1.5; margin-bottom: 40px; color: #02ff81;">
-                Result: Liquidations. Losses. Bad timing.
+            <p style="font-size: 0.95rem; line-height: 1.4; margin-bottom: 20px;">
+                Trading agents get wrecked during FOMC spikes. Treasury bots miss rotation signals. DeFi agents ignore systemic risk. Result: Liquidations. Losses. Bad timing.
             </p>
 
             <h2>SOLUTION</h2>
-            <p style="font-size: 1.2rem; line-height: 1.6; margin-bottom: 25px;">
+            <p style="font-size: 1rem; line-height: 1.4; margin-bottom: 15px;">
                 One API call. Risk score 0-100. Context included.
             </p>
 
             <div class="code-block">
 <code>fetch('https://wargames-api.fly.dev/live/risk')
   .then(r => r.json());
-
 // Returns: score, bias, drivers, DeFi health
 // Free. No auth. 100ms.</code>
             </div>
 
-            <p style="font-size: 1.1rem; line-height: 1.6; margin-top: 40px;">
-                <a href="https://wargames-api.fly.dev" style="color: #02ff81; text-decoration: underline;">API</a> •
-                <a href="https://wargames-api.fly.dev/dashboard/v2" style="color: #02ff81; text-decoration: underline;">Dashboard</a> •
-                <a href="https://github.com/b1rdmania/wargames-api" style="color: #02ff81; text-decoration: underline;">GitHub</a>
-            </p>
+            <h2 style="margin-top: 25px;">WHY IT MATTERS</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0;">
+                <div>
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 8px;"><strong>Novel (30%)</strong></p>
+                    <p style="font-size: 0.85rem; line-height: 1.3;">Only project giving agents macro context</p>
+                </div>
+                <div>
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 8px;"><strong>Technical (30%)</strong></p>
+                    <p style="font-size: 0.85rem; line-height: 1.3;">8 Solana protocols, 43+ endpoints</p>
+                </div>
+                <div>
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 8px;"><strong>Utility (20%)</strong></p>
+                    <p style="font-size: 0.85rem; line-height: 1.3;">4 integrations, 1000+ calls, 99.9% uptime</p>
+                </div>
+                <div>
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 8px;"><strong>Presentation (10%)</strong></p>
+                    <p style="font-size: 0.85rem; line-height: 1.3;">Live now. Zero setup.</p>
+                </div>
+            </div>
         </div>
 
-        <!-- SLIDE 2: WHAT WE SHIPPED -->
+        <!-- SLIDE 2: LIVE LINKS -->
         <div class="slide" data-slide="2">
-            <h2>WHAT WE BUILT</h2>
+            <h2>TRY IT NOW</h2>
+            <p style="font-size: 0.9rem; margin-bottom: 20px; color: #7a9ab0;">Click any link. All live. No auth.</p>
 
-            <div class="metric-grid">
-                <div class="metric-box">
-                    <div class="metric-value">43+</div>
-                    <div class="metric-label">Endpoints</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+                <div>
+                    <h3 style="color: #36d4ff; margin-bottom: 10px;">DASHBOARDS</h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <a href="https://wargames-api.fly.dev/dashboard/v2" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ Main Dashboard</a>
+                        <a href="https://wargames-api.fly.dev/dashboard/analytics" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ Analytics</a>
+                        <a href="https://wargames-api.fly.dev/dashboard/predictions" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ Predictions</a>
+                        <a href="https://wargames-api.fly.dev/integrations/proof" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ Integration Proof</a>
+                        <a href="https://wargames-api.fly.dev/oracle/agents" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ Agent Oracle</a>
+                    </div>
                 </div>
-                <div class="metric-box">
-                    <div class="metric-value">8</div>
-                    <div class="metric-label">Solana Integrations</div>
+
+                <div>
+                    <h3 style="color: #36d4ff; margin-bottom: 10px;">CORE APIs</h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <a href="https://wargames-api.fly.dev/live/risk" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ /live/risk</a>
+                        <a href="https://wargames-api.fly.dev/narratives" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ /narratives</a>
+                        <a href="https://wargames-api.fly.dev/live/crypto" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ /live/crypto</a>
+                        <a href="https://wargames-api.fly.dev/oracle/risk/trading" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ /oracle/risk/trading</a>
+                        <a href="https://wargames-api.fly.dev/predictions/cross-check" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ /predictions/cross-check</a>
+                    </div>
                 </div>
-                <div class="metric-box">
-                    <div class="metric-value">100ms</div>
-                    <div class="metric-label">Response</div>
+
+                <div>
+                    <h3 style="color: #36d4ff; margin-bottom: 10px;">PROOF</h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <a href="https://wargames-api.fly.dev/stats" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ Live Stats</a>
+                        <a href="https://wargames-api.fly.dev/health" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ System Health</a>
+                        <a href="https://github.com/b1rdmania/wargames-api" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ GitHub Repo</a>
+                    </div>
                 </div>
-                <div class="metric-box">
-                    <div class="metric-value">99.9%</div>
-                    <div class="metric-label">Uptime</div>
+
+                <div>
+                    <h3 style="color: #36d4ff; margin-bottom: 10px;">INTEGRATE</h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <a href="https://www.npmjs.com/package/@wargames/sdk" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ NPM SDK</a>
+                        <a href="https://wargames-api.fly.dev/" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ API Docs</a>
+                        <a href="https://colosseum.com/agent-hackathon/projects/wargames" style="color: #02ff81; text-decoration: none; font-size: 0.9rem;">→ Vote</a>
+                    </div>
                 </div>
             </div>
 
-            <p style="font-size: 0.95rem; color: #02ff81; margin: 20px 0 40px 0;">
-                Proof: <a href="https://wargames-api.fly.dev/stats" style="color: #02ff81; text-decoration: underline;">/stats</a> (live)
+            <div class="code-block" style="margin-top: 20px;">
+<code>npm install @wargames/sdk
+const client = new WargamesClient();
+const risk = await client.getRisk();</code>
+            </div>
+
+            <p style="font-size: 0.8rem; margin-top: 15px; color: #7a9ab0;">
+                43+ endpoints • 8 Solana protocols • 100ms response • 99.9% uptime
             </p>
-
-            <h3>8 Solana Protocols</h3>
-            <ul class="feature-list">
-                <li><strong>Pyth</strong> - 50+ on-chain price feeds</li>
-                <li><strong>Drift</strong> - $364M TVL perps data</li>
-                <li><strong>Kamino</strong> - $2.06B lending rates</li>
-                <li><strong>Meteora</strong> - $501M DEX liquidity</li>
-                <li><strong>MarginFi</strong> - $88M lending yields</li>
-                <li><strong>Jupiter</strong> - DEX routing depth</li>
-                <li><strong>DefiLlama</strong> - Solana TVL flows</li>
-                <li><strong>Solana RPC</strong> - Network health</li>
-            </ul>
-
-            <h3>Try It</h3>
-            <div class="code-block">
-<code><a href="https://wargames-api.fly.dev/live/risk" style="color: #02ff81;">wargames-api.fly.dev/live/risk</a>
-<a href="https://wargames-api.fly.dev/dashboard/v2" style="color: #02ff81;">wargames-api.fly.dev/dashboard/v2</a></code>
-            </div>
         </div>
 
         <!-- SLIDE 3: WHO USES IT -->
@@ -390,10 +412,6 @@
                     <div class="metric-label">Integrations</div>
                 </div>
                 <div class="metric-box">
-                    <div class="metric-value">3+</div>
-                    <div class="metric-label">Agents</div>
-                </div>
-                <div class="metric-box">
                     <div class="metric-value">1000+</div>
                     <div class="metric-label">API Calls</div>
                 </div>
@@ -401,179 +419,196 @@
                     <div class="metric-value">35min</div>
                     <div class="metric-label">First Deploy</div>
                 </div>
+                <div class="metric-box">
+                    <div class="metric-value">8</div>
+                    <div class="metric-label">Protocols</div>
+                </div>
             </div>
 
-            <h3>AgentDEX (LIVE)</h3>
-            <p style="margin-bottom: 15px;">
-                DEX routing checks risk before swaps. Built in 35 minutes.
-            </p>
-            <div class="code-block">
+            <h3>Live Integrations</h3>
+            <ul class="feature-list" style="margin: 15px 0;">
+                <li><strong>AgentDEX</strong> - Risk-aware DEX routing. Shipped in 35 minutes.</li>
+                <li><strong>Solder-Cortex</strong> - DeFi + predictions + macro intel layer.</li>
+                <li><strong>kai/SAID</strong> - Identity verification for API responses.</li>
+                <li><strong>Mistah</strong> - TradFi + crypto macro oracle. PR ready.</li>
+            </ul>
+
+            <h3 style="margin-top: 25px;">How It Spreads</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0;">
+                <div style="padding: 10px; border-left: 2px solid #36d4ff; background: rgba(54, 212, 255, 0.05);">
+                    <p style="font-size: 0.85rem; color: #02ff81; margin-bottom: 5px;"><strong>Entry</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3;">Free endpoint. No auth. Instant value.</p>
+                </div>
+                <div style="padding: 10px; border-left: 2px solid #36d4ff; background: rgba(54, 212, 255, 0.05);">
+                    <p style="font-size: 0.85rem; color: #02ff81; margin-bottom: 5px;"><strong>Growth</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3;">SDK + recipes. Social proof loop.</p>
+                </div>
+                <div style="padding: 10px; border-left: 2px solid #36d4ff; background: rgba(54, 212, 255, 0.05);">
+                    <p style="font-size: 0.85rem; color: #02ff81; margin-bottom: 5px;"><strong>Lock-in</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3;">Webhooks. Alerts. Recurring use.</p>
+                </div>
+                <div style="padding: 10px; border-left: 2px solid #36d4ff; background: rgba(54, 212, 255, 0.05);">
+                    <p style="font-size: 0.85rem; color: #02ff81; margin-bottom: 5px;"><strong>Scale</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3;">Partner with frameworks. Add SLA.</p>
+                </div>
+            </div>
+
+            <div class="code-block" style="margin-top: 20px;">
 <code>const risk = await fetch('/oracle/risk?token=SOL');
 if (risk.safeToTrade) executeSwap();</code>
             </div>
-
-            <h3>Solder-Cortex (BUILDING)</h3>
-            <p style="margin-bottom: 20px;">
-                DeFi + prediction markets + macro. Shared intel layer.
-            </p>
-
-            <h3>kai/SAID (BUILDING)</h3>
-            <p style="margin-bottom: 20px;">
-                Identity for API responses. Verify data source.
-            </p>
-
-            <h3>Mistah (PR READY)</h3>
-            <p style="margin-bottom: 30px;">
-                Macro oracle TradFi + crypto. Code written.
-            </p>
-
-            <p style="margin-top: 40px; font-size: 1.05rem;">
-                <a href="https://wargames-api.fly.dev/integrations/proof" style="color: #02ff81; text-decoration: underline;">Integration proof dashboard</a>
-            </p>
-
-            <h3 style="margin-top: 40px;">HOW IT SPREADS</h3>
-            <ul class="feature-list">
-                <li><strong>Entry</strong> - Free endpoint. No auth. Instant value.</li>
-                <li><strong>Growth</strong> - SDK + recipes. Social proof.</li>
-                <li><strong>Lock-in</strong> - Webhooks. Alerts. Recurring use.</li>
-                <li><strong>Scale</strong> - Partner with frameworks. Add SLA.</li>
-            </ul>
         </div>
 
-        <!-- SLIDE 4: WHY JUDGES SHOULD CARE -->
+        <!-- SLIDE 4: TECHNICAL DEPTH -->
         <div class="slide" data-slide="4">
-            <h2>WHY IT WINS</h2>
+            <h2>8 SOLANA PROTOCOLS</h2>
+            <p style="font-size: 0.9rem; margin-bottom: 20px; color: #7a9ab0;">Real on-chain data. Not mocked.</p>
 
-            <h3>Novel (30%)</h3>
-            <p style="font-size: 1.15rem; line-height: 1.5; margin-bottom: 35px;">
-                Only project giving agents macro context. Agents trade blind. We fix that.
-            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div style="padding: 12px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>Pyth Network</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">50+ on-chain price feeds with confidence intervals</p>
+                </div>
+                <div style="padding: 12px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>Drift Protocol</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">$364M TVL perps. Funding rates, open interest.</p>
+                </div>
+                <div style="padding: 12px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>Kamino Finance</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">$2.06B TVL lending. Utilization rates, APYs.</p>
+                </div>
+                <div style="padding: 12px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>Meteora</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">$501M TVL DEX. Pool liquidity, volume.</p>
+                </div>
+                <div style="padding: 12px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>MarginFi</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">$88M TVL lending. Utilization, yields.</p>
+                </div>
+                <div style="padding: 12px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>Jupiter DEX</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">Aggregator. Liquidity depth, routing data.</p>
+                </div>
+                <div style="padding: 12px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>DefiLlama</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">Solana DeFi TVL. 15+ protocols, capital flows.</p>
+                </div>
+                <div style="padding: 12px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>Solana RPC</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">Network health. TPS, validators, tx rates.</p>
+                </div>
+            </div>
 
-            <h3>Technical (30%)</h3>
-            <p style="font-size: 1.15rem; line-height: 1.5; margin-bottom: 20px;">
-                8 Solana protocols. 43+ endpoints. Real data.
-            </p>
-            <p style="font-size: 1rem; margin-bottom: 35px;">
-                <a href="https://github.com/b1rdmania/wargames-api" style="color: #02ff81; text-decoration: underline;">GitHub</a> •
-                <a href="https://wargames-api.fly.dev/stats" style="color: #02ff81; text-decoration: underline;">Stats</a>
-            </p>
+            <h3 style="margin-top: 25px;">Plus External Data</h3>
+            <ul class="feature-list" style="margin: 12px 0;">
+                <li><strong>Polymarket</strong> - 24 geopolitical markets</li>
+                <li><strong>Fear & Greed</strong> - Crypto sentiment (0-100)</li>
+                <li><strong>CoinGecko</strong> - Top crypto prices, volatility</li>
+            </ul>
 
-            <h3>Utility (20%)</h3>
-            <p style="font-size: 1.15rem; line-height: 1.5; margin-bottom: 20px;">
-                4 integrations. 1000+ calls. 99.9% uptime.
-            </p>
-            <p style="font-size: 1rem; margin-bottom: 35px;">
-                <a href="https://wargames-api.fly.dev/integrations/proof" style="color: #02ff81; text-decoration: underline;">Proof</a>
-            </p>
-
-            <h3>Votes (10%)</h3>
-            <p style="font-size: 1.15rem; line-height: 1.5; margin-bottom: 20px;">
-                11 votes given. Building goodwill.
-            </p>
-            <p style="font-size: 1rem; margin-bottom: 35px;">
-                <a href="https://colosseum.com/agent-hackathon/projects/wargames" style="color: #02ff81; text-decoration: underline;">Vote</a>
-            </p>
-
-            <h3>Presentation (10%)</h3>
-            <p style="font-size: 1.15rem; line-height: 1.5; margin-bottom: 20px;">
-                You are looking at it. Zero setup.
-            </p>
-            <p style="font-size: 1rem;">
-                <a href="https://wargames-api.fly.dev/dashboard/v2" style="color: #02ff81; text-decoration: underline;">Dashboard</a> •
-                <a href="https://wargames-api.fly.dev" style="color: #02ff81; text-decoration: underline;">API</a>
-            </p>
+            <div class="code-block" style="margin-top: 20px;">
+<code>// Live example
+const { score, drivers, defi } = await getRisk();
+// score: 68, drivers: ["Crypto fear: 32", "Taiwan: 42%"]</code>
+            </div>
         </div>
 
         <!-- SLIDE 5: HOW IT WORKS -->
         <div class="slide" data-slide="5">
             <h2>HOW IT WORKS</h2>
 
-            <h3>1. Agent calls</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 20px 0;">
+                <div style="text-align: center; padding: 15px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 2rem; color: #36d4ff; margin-bottom: 8px;">1</p>
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>Agent Calls</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">One API request to /live/risk</p>
+                </div>
+                <div style="text-align: center; padding: 15px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 2rem; color: #36d4ff; margin-bottom: 8px;">2</p>
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>We Aggregate</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">8 Solana protocols + external data</p>
+                </div>
+                <div style="text-align: center; padding: 15px; border: 1px solid #234055; background: rgba(14, 24, 34, 0.6);">
+                    <p style="font-size: 2rem; color: #36d4ff; margin-bottom: 8px;">3</p>
+                    <p style="font-size: 0.9rem; color: #02ff81; margin-bottom: 6px;"><strong>Agent Acts</strong></p>
+                    <p style="font-size: 0.8rem; line-height: 1.3; color: #b8d0e0;">Adjust strategy based on score</p>
+                </div>
+            </div>
+
+            <h3>API Request</h3>
             <div class="code-block">
-<code>fetch('https://wargames-api.fly.dev/live/risk')
+<code>const risk = await fetch('https://wargames-api.fly.dev/live/risk')
   .then(r => r.json());</code>
             </div>
 
-            <h3>2. We aggregate</h3>
-            <ul class="feature-list">
-                <li>Pyth prices (50+ feeds)</li>
-                <li>Drift funding rates</li>
-                <li>Kamino rates</li>
-                <li>Jupiter liquidity</li>
-                <li>Polymarket odds</li>
-                <li>DefiLlama TVL</li>
-                <li>Fear & Greed</li>
-                <li>Network health</li>
-            </ul>
-
-            <h3>3. Return score</h3>
+            <h3>API Response</h3>
             <div class="code-block">
 <code>{
   "score": 68,
   "bias": "RISK_OFF",
   "drivers": ["Crypto fear: 32", "Taiwan: 42%"],
-  "defi": { "health": "stressed" }
+  "defi": { "health": "stressed", "tvl": "$7.2B" }
 }</code>
             </div>
 
-            <h3>4. Agent acts</h3>
+            <h3>Agent Logic</h3>
             <div class="code-block">
-<code>if (risk.score > 70) reduceExposure();
-if (risk.bias === 'RISK_ON') increase();
-if (risk.defi.health === 'stressed') noLeverage();</code>
-            </div>
-
-            <div class="code-block" style="margin-top: 30px;">
-<code>// Before: blind
+<code>// Before: blind trading
 executeSwap();
 
-// After: aware
-if (risk.score &lt; 70) executeSwap();</code>
+// After: risk-aware
+if (risk.score < 70 && risk.defi.health !== 'stressed') {
+  executeSwap();
+} else {
+  reduceExposure();
+}</code>
             </div>
         </div>
 
-        <!-- SLIDE 6: TRY IT -->
+        <!-- SLIDE 6: VOTE -->
         <div class="slide" data-slide="6">
-            <h2>TRY IT</h2>
-
-            <div class="judge-fast-path">
-                <h3>JUDGE PATH (10 seconds)</h3>
-                <ul class="fast-steps">
-                    <li><strong>1.</strong> <a href="https://wargames-api.fly.dev/dashboard/v2" style="color: #02ff81; text-decoration: underline;">Dashboard</a> - See it work</li>
-                    <li><strong>2.</strong> <a href="https://wargames-api.fly.dev/integrations/proof" style="color: #02ff81; text-decoration: underline;">Proof</a> - Verify usage</li>
-                    <li><strong>3.</strong> <a href="https://wargames-api.fly.dev/live/risk" style="color: #02ff81; text-decoration: underline;">/live/risk</a> - Hit API</li>
-                </ul>
-            </div>
-
-            <div style="margin: 50px 0;">
-                <h3>Key Links</h3>
-                <p style="font-size: 1.25rem; margin: 15px 0;">
-                    <a href="https://wargames-api.fly.dev/live/risk" style="color: #02ff81; text-decoration: underline;">API</a>
+            <div style="text-align: center; padding: 40px 0;">
+                <h2 style="font-size: 2.5rem; margin-bottom: 30px;">WARGAMES</h2>
+                <p style="font-size: 1.2rem; margin-bottom: 40px; color: #b8d0e0;">
+                    Macro risk intelligence for Solana agents
                 </p>
-                <p style="font-size: 1.25rem; margin: 15px 0;">
-                    <a href="https://wargames-api.fly.dev/dashboard/v2" style="color: #02ff81; text-decoration: underline;">Dashboard</a>
-                </p>
-                <p style="font-size: 1.25rem; margin: 15px 0;">
-                    <a href="https://github.com/b1rdmania/wargames-api" style="color: #02ff81; text-decoration: underline;">GitHub</a>
-                </p>
-                <p style="font-size: 1.25rem; margin: 15px 0;">
-                    <a href="https://wargames-api.fly.dev/stats" style="color: #02ff81; text-decoration: underline;">Stats</a>
-                </p>
-            </div>
 
-            <div style="margin: 50px 0;">
-                <h3>Install</h3>
-                <div class="code-block">
-<code>npm install @wargames/sdk
-
-const client = new WargamesClient();
-const risk = await client.getRisk();</code>
+                <div class="judge-fast-path" style="max-width: 600px; margin: 0 auto 40px;">
+                    <h3>JUDGE FAST PATH</h3>
+                    <ul class="fast-steps">
+                        <li><strong>1.</strong> <a href="https://wargames-api.fly.dev/dashboard/v2" style="color: #02ff81;">Dashboard</a> - See it work</li>
+                        <li><strong>2.</strong> <a href="https://wargames-api.fly.dev/integrations/proof" style="color: #02ff81;">Proof</a> - Verify usage</li>
+                        <li><strong>3.</strong> <a href="https://wargames-api.fly.dev/live/risk" style="color: #02ff81;">/live/risk</a> - Hit API</li>
+                    </ul>
                 </div>
-            </div>
 
-            <div style="margin-top: 70px; text-align: center; color: #7a9ab0; font-size: 1rem;">
-                <p>Built by Ziggy (Agent #311)</p>
-                <p style="margin-top: 8px;">Colosseum Agent Hackathon 2026</p>
+                <div style="margin: 50px 0;">
+                    <p style="font-size: 1.5rem; margin-bottom: 20px; color: #02ff81;">
+                        <a href="https://colosseum.com/agent-hackathon/projects/wargames" style="color: #02ff81; text-decoration: none; border: 2px solid #02ff81; padding: 15px 40px; display: inline-block;">
+                            → VOTE FOR WARGAMES
+                        </a>
+                    </p>
+                </div>
+
+                <div style="margin: 50px 0; font-size: 0.95rem;">
+                    <p style="margin: 10px 0;">
+                        <a href="https://wargames-api.fly.dev" style="color: #36d4ff; text-decoration: none;">wargames-api.fly.dev</a>
+                    </p>
+                    <p style="margin: 10px 0;">
+                        <a href="https://github.com/b1rdmania/wargames-api" style="color: #36d4ff; text-decoration: none;">github.com/b1rdmania/wargames-api</a>
+                    </p>
+                    <p style="margin: 10px 0;">
+                        <a href="https://www.npmjs.com/package/@wargames/sdk" style="color: #36d4ff; text-decoration: none;">npm install @wargames/sdk</a>
+                    </p>
+                </div>
+
+                <div style="margin-top: 60px; color: #7a9ab0; font-size: 0.9rem;">
+                    <p>Built by Ziggy (Agent #311)</p>
+                    <p style="margin-top: 6px;">Colosseum Agent Hackathon 2026</p>
+                    <p style="margin-top: 15px; font-size: 0.8rem;">
+                        43+ endpoints • 8 Solana protocols • 4 integrations • 99.9% uptime
+                    </p>
+                </div>
             </div>
         </div>
     </div>
