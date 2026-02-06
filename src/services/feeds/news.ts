@@ -28,7 +28,7 @@ export async function fetchNews(): Promise<FeedResponse<NewsData>> {
   const items: NewsItem[] = [];
 
   try {
-    const gdeltQuery = 'FOMC OR "Federal Reserve" OR "rate cut" OR sanctions OR Iran OR Taiwan OR recession OR Bitcoin OR crypto OR "interest rates" OR inflation';
+    const gdeltQuery = '(FOMC OR "Federal Reserve" OR "rate cut" OR sanctions OR Iran OR Taiwan OR recession OR Bitcoin OR crypto OR "interest rates" OR inflation)';
     const gdeltData = await fetchGDELT(gdeltQuery, 50);
 
     if (gdeltData.articles) {

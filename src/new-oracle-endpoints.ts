@@ -11,7 +11,6 @@
 
 import { Request, Response } from 'express';
 import { calculateDynamicRisk } from './services/dataFetchers';
-import { getHighImpactEvents } from './data/events';
 import { fetchPolymarketOdds } from './services/dataFetchers';
 
 /**
@@ -100,10 +99,6 @@ export const tradingRiskHandler = async (req: Request, res: Response) => {
     const strategyType = (strategy as string) || 'spot';
 
     const riskData = await calculateDynamicRisk();
-    const upcomingEvents = getHighImpactEvents();
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const imminentEvents = upcomingEvents.filter(e => new Date(e.date) <= tomorrow);
 
     // Strategy configs
     const strategies: Record<string, {
@@ -153,7 +148,7 @@ export const tradingRiskHandler = async (req: Request, res: Response) => {
     const adjustedRisk = Math.min(100, Math.round(riskData.score * strategyConfig.riskMultiplier));
 
     let posture = 'NORMAL';
-    if (adjustedRisk > 75 || imminentEvents.length > 0) posture = 'DEFENSIVE';
+    if (adjustedRisk > 75) posture = 'DEFENSIVE';
     else if (adjustedRisk < 35) posture = 'AGGRESSIVE';
     else if (adjustedRisk > 55) posture = 'CAUTIOUS';
 
@@ -165,8 +160,6 @@ export const tradingRiskHandler = async (req: Request, res: Response) => {
       posture,
       max_leverage: strategyConfig.maxLeverage,
       recommendations: strategyConfig.recommendations,
-      upcoming_events: imminentEvents.length,
-      imminent_events: imminentEvents.map(e => ({ event: e.event, date: e.date, impact: e.risk_impact })),
       drivers: riskData.drivers,
       components: riskData.components,
       timestamp: new Date().toISOString(),

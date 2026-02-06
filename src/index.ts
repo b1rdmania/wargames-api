@@ -10,8 +10,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
-import { narratives, calculateGlobalRisk, Narrative } from './data/narratives';
-import { events, getUpcomingEvents, getHighImpactEvents } from './data/events';
 import { integrations, getIntegrationStats, getProductionIntegrations, getTestingIntegrations, getPlannedIntegrations } from './data/integrations';
 import { BRAND_CSS } from './brand';
 import {
@@ -19,7 +17,6 @@ import {
   fetchCryptoPrices,
   fetchPolymarketOdds,
   fetchEconomicIndicators,
-  fetchCommodities as fetchCommoditiesLegacy,
   fetchWeather,
   fetchWorldState,
   calculateDynamicRisk,
@@ -30,6 +27,7 @@ import { fetchSolanaDeFi } from './services/defillamaIntegration';
 import { fetchSolanaMetrics } from './services/solanaMetrics';
 import { calculateNarrativeScores } from './services/narrativeScoring';
 import { fetchDriftData } from './services/driftIntegration';
+import { getEconomicEvents, getUpcomingEvents, getHighImpactEvents, getNextCriticalEvent } from './services/economicCalendar';
 import { fetchProtocol } from './services/protocolIntegration';
 import { getJupiterQuote, getJupiterTokens } from './services/jupiterIntegration';
 import {
@@ -73,6 +71,7 @@ import { fetchMarkets } from './services/feeds/markets';
 import { fetchVolatility } from './services/feeds/volatility';
 import { fetchCommodities } from './services/feeds/commodities';
 import { fetchGeopolitics } from './services/feeds/geopolitics';
+import { generateFeedsDashboard } from './dashboards/feedsDashboard';
 import { fetchCredit } from './services/feeds/credit';
 import { fetchTape } from './services/feeds/tape';
 
@@ -161,7 +160,7 @@ app.get('/', (_req: Request, res: Response) => {
     quick_start: {
       step_1: 'GET /risk - Global risk score (0-100)',
       step_2: 'Integrate: if (risk.score > 70) reduceExposure()',
-      step_3: 'GET /narratives - Detailed breakdown'
+      step_3: 'GET /live/risk - Real-time risk assessment'
     },
     endpoints: {
       '/risk': 'Global macro risk score (static)',
@@ -183,9 +182,9 @@ app.get('/', (_req: Request, res: Response) => {
       '/live/economic': 'Economic indicators',
       '/live/commodities': 'Commodity prices',
       '/live/weather': 'Weather at trading hubs',
-      '/narratives': 'Active geopolitical narratives',
-      '/narratives/:id': 'Specific narrative detail',
-      '/events': 'Upcoming macro events calendar',
+      '/events': 'Real economic calendar (FMP + Fed)',
+      '/events/next-critical': 'Next high-impact event',
+      '/narratives': 'Live narrative tracking (calculated)',
       '/dashboard': 'Live visual dashboard',
       '/dashboard/analytics': 'Real-time analytics (NORAD)',
       '/dashboard/integrations': 'Integrations showcase',
@@ -220,8 +219,6 @@ app.get('/health', (_req: Request, res: Response) => {
     status: 'operational',
     timestamp: new Date().toISOString(),
     version: '1.2.0',
-    narratives_count: narratives.length,
-    events_count: events.length,
     integrations_count: getIntegrationStats().total,
     wallet_connections: walletStats.total,
     features: {
@@ -384,208 +381,30 @@ app.get('/stats/live', (_req: Request, res: Response) => {
  * THE KEY ENDPOINT - Global risk score
  * One number. Instant value.
  */
-app.get('/risk', (_req: Request, res: Response) => {
-  const risk = calculateGlobalRisk();
-
-  res.json({
-    score: risk.score,
-    bias: risk.bias,
-    summary: risk.summary,
-    interpretation: {
-      '0-30': 'Risk-on environment. Consider increasing exposure.',
-      '30-50': 'Neutral. Standard risk parameters.',
-      '50-70': 'Elevated caution. Consider reducing leverage.',
-      '70-100': 'Defensive stance. Reduce exposure, increase hedges.'
-    },
-    updated: new Date().toISOString(),
-    next_major_event: getUpcomingEvents(7)[0] || null
-  });
-});
-
-/**
- * GET /risk/history
- * Historical risk scores (simulated for now)
- */
-app.get('/risk/history', (req: Request, res: Response) => {
-  const days = parseInt(req.query.days as string) || 7;
-  const history = [];
-
-  for (let i = days; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    // Simulate some variance
-    const baseScore = calculateGlobalRisk().score;
-    const variance = Math.floor(Math.random() * 10) - 5;
-    history.push({
-      date: date.toISOString().split('T')[0],
-      score: Math.max(0, Math.min(100, baseScore + variance))
-    });
-  }
-
-  res.json({ history });
-});
-
-/**
- * GET /risk/defi
- * DeFi-specific risk assessment
- */
-app.get('/risk/defi', (_req: Request, res: Response) => {
-  const defiNarratives = narratives.filter(n =>
-    n.id === 'defi-contagion' || n.id === 'regulatory-crackdown' || n.id === 'fed-pivot'
-  );
-
-  const avgScore = Math.round(
-    defiNarratives.reduce((sum, n) => sum + n.current_score, 0) / defiNarratives.length
-  );
-
-  res.json({
-    score: avgScore,
-    bias: avgScore > 60 ? 'defensive' : avgScore > 40 ? 'cautious' : 'neutral',
-    key_risks: defiNarratives.map(n => ({ id: n.id, name: n.name, score: n.current_score })),
-    recommendation: avgScore > 60
-      ? 'Consider reducing DeFi exposure and LP positions'
-      : 'Standard DeFi risk parameters acceptable',
-    updated: new Date().toISOString()
-  });
-});
-
-/**
- * GET /risk/trading
- * Trading-specific risk assessment
- */
-app.get('/risk/trading', (_req: Request, res: Response) => {
-  const tradingNarratives = narratives.filter(n =>
-    n.id === 'fed-pivot' || n.id === 'ai-bubble' || n.id === 'memecoin-mania' || n.id === 'institutional-adoption'
-  );
-
-  const avgScore = Math.round(
-    tradingNarratives.reduce((sum, n) => sum + n.current_score, 0) / tradingNarratives.length
-  );
-
-  res.json({
-    score: avgScore,
-    bias: avgScore > 60 ? 'reduce_leverage' : avgScore > 40 ? 'standard' : 'opportunistic',
-    key_factors: tradingNarratives.map(n => ({ id: n.id, name: n.name, score: n.current_score, trend: n.trend })),
-    recommendation: avgScore > 60
-      ? 'Reduce position sizes and leverage'
-      : 'Normal trading parameters acceptable',
-    updated: new Date().toISOString()
-  });
-});
-
-// =============================================================================
-// NARRATIVE ENDPOINTS
-// =============================================================================
-
-/**
- * GET /narratives
- * All active narratives with dynamic scores
- */
-app.get('/narratives', async (_req: Request, res: Response) => {
+app.get('/risk', async (_req: Request, res: Response) => {
   try {
-    // Get dynamic scores
-    const dynamicScores = await calculateNarrativeScores();
-
-    // Merge dynamic scores with static narrative definitions
-    const summary = narratives.map(n => {
-      const dynamicData = dynamicScores[n.id];
-      return {
-        id: n.id,
-        name: n.name,
-        score: dynamicData?.score ?? n.current_score, // Use dynamic if available
-        trend: dynamicData?.trend ?? n.trend,
-        suggested_action: n.crypto_impact.suggested_action,
-        drivers: dynamicData?.drivers || []
-      };
-    });
-
-    // Check for narrative shifts and trigger webhooks (non-blocking)
-    checkNarrativeShifts(summary.map(n => ({ id: n.id, current_score: n.score }))).catch(err => {
-      console.error('Webhook error:', err);
-    });
+    const risk = await calculateDynamicRisk();
 
     res.json({
-      count: narratives.length,
-      narratives: summary,
-      note: 'Scores calculated from live market data (Fear & Greed, Polymarket, crypto prices)',
+      score: risk.score,
+      bias: risk.score >= 70 ? 'defensive' : risk.score >= 50 ? 'cautious' : risk.score >= 30 ? 'neutral' : 'aggressive',
+      summary: risk.drivers.slice(0, 3).join(', '),
+      interpretation: {
+        '0-30': 'Risk-on environment. Consider increasing exposure.',
+        '30-50': 'Neutral. Standard risk parameters.',
+        '50-70': 'Elevated caution. Consider reducing leverage.',
+        '70-100': 'Defensive stance. Reduce exposure, increase hedges.'
+      },
       updated: new Date().toISOString()
     });
-  } catch (err) {
-    // Fallback to static scores if dynamic calculation fails
-    const summary = narratives.map(n => ({
-      id: n.id,
-      name: n.name,
-      score: n.current_score,
-      trend: n.trend,
-      suggested_action: n.crypto_impact.suggested_action
-    }));
-
-    res.json({
-      count: narratives.length,
-      narratives: summary,
-      note: 'Using fallback static scores (dynamic calculation unavailable)',
-      updated: new Date().toISOString()
-    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to calculate risk' });
   }
 });
 
-/**
- * GET /narratives/:id
- * Specific narrative detail with dynamic scoring
- */
-app.get('/narratives/:id', async (req: Request, res: Response) => {
-  const narrative = narratives.find(n => n.id === req.params.id);
 
-  if (!narrative) {
-    return res.status(404).json({
-      error: 'Narrative not found',
-      available: narratives.map(n => n.id)
-    });
-  }
 
-  try {
-    // Get dynamic score for this narrative
-    const dynamicScores = await calculateNarrativeScores();
-    const dynamicData = dynamicScores[narrative.id];
 
-    // Merge dynamic data with static definition
-    res.json({
-      ...narrative,
-      current_score: dynamicData?.score ?? narrative.current_score,
-      trend: dynamicData?.trend ?? narrative.trend,
-      score_drivers: dynamicData?.drivers || ['Using static score'],
-      last_updated: new Date().toISOString()
-    });
-  } catch (err) {
-    // Fallback to static data
-    res.json({
-      ...narrative,
-      score_drivers: ['Using static score (dynamic calculation unavailable)'],
-      last_updated: new Date().toISOString()
-    });
-  }
-});
-
-// =============================================================================
-// EVENT ENDPOINTS
-// =============================================================================
-
-/**
- * GET /events
- * Upcoming macro events
- */
-app.get('/events', (req: Request, res: Response) => {
-  const days = parseInt(req.query.days as string) || 14;
-  const highImpactOnly = req.query.high_impact === 'true';
-
-  const upcomingEvents = highImpactOnly ? getHighImpactEvents() : getUpcomingEvents(days);
-
-  res.json({
-    count: upcomingEvents.length,
-    events: upcomingEvents,
-    note: 'Plan your positions around high-impact events'
-  });
-});
 
 // =============================================================================
 // INTEGRATION ENDPOINTS
@@ -647,7 +466,7 @@ app.post('/subscribe', (req: Request, res: Response) => {
     integration,
     next_steps: [
       'GET /risk - Start using macro intelligence',
-      'GET /narratives - Explore active narratives',
+      'GET /live/risk - Real-time risk assessment',
       'Share your integration - We\'ll shout you out!'
     ]
   });
@@ -706,25 +525,6 @@ async function getPositionModifier(): Promise<number> {
 // When sizing positions:
 const modifier = await getPositionModifier();
 const positionSize = baseSize * modifier;
-    `.trim(),
-
-    events: `
-// WARGAMES Event-Aware Trading
-const WARGAMES = 'https://api.wargames.sol';
-
-async function checkUpcomingRisks(): Promise<boolean> {
-  const { events } = await fetch(\`\${WARGAMES}/events?high_impact=true\`).then(r => r.json());
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  return events.some(e => new Date(e.date) <= tomorrow);
-}
-
-// Before opening new positions:
-if (await checkUpcomingRisks()) {
-  console.log('High-impact event within 24h - reducing position size');
-  this.positionSizeModifier = 0.5;
-}
     `.trim()
   };
 
@@ -860,23 +660,6 @@ app.get('/live/economic', async (_req: Request, res: Response) => {
 });
 
 /**
- * GET /live/commodities
- * Commodity prices
- */
-app.get('/live/commodities', async (_req: Request, res: Response) => {
-  try {
-    const commodities = await fetchCommoditiesLegacy();
-    res.json({
-      count: commodities.length,
-      commodities,
-      updated: new Date().toISOString()
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch commodities' });
-  }
-});
-
-/**
  * GET /live/weather
  * Weather at key trading hubs
  */
@@ -923,15 +706,6 @@ app.get('/live/betting-context', async (_req: Request, res: Response) => {
       warnings.push('Reduce bet size by 20%');
     }
 
-    // Memecoin mania = degen season
-    const memecoinNarrative = narratives.find((n: Narrative) => n.id === 'memecoin-mania');
-    if (memecoinNarrative && memecoinNarrative.current_score > 70) {
-      signals.push('Memecoin mania hot - degen activity elevated');
-      if (memecoinNarrative.trend === 'rising') {
-        signals.push('Trend rising - capitalize on momentum');
-      }
-    }
-
     // High geopolitical risk = delay/reduce exposure
     if (risk.components.geopolitical > 60) {
       signals.push('Elevated geopolitical risk');
@@ -944,8 +718,8 @@ app.get('/live/betting-context', async (_req: Request, res: Response) => {
       recommendation = 'Defensive: Reduce bet sizes significantly or pause wagering';
     } else if (risk.score > 50) {
       recommendation = 'Cautious: Standard bet sizing with tighter risk limits';
-    } else if (risk.score < 30 && memecoinNarrative && memecoinNarrative.current_score > 60) {
-      recommendation = 'Aggressive: Risk-on environment + degen season = increase pool sizes';
+    } else if (risk.score < 30) {
+      recommendation = 'Aggressive: Risk-on environment = increase pool sizes';
     } else {
       recommendation = 'Neutral: Normal wagering parameters acceptable';
     }
@@ -961,12 +735,6 @@ app.get('/live/betting-context', async (_req: Request, res: Response) => {
         fear_greed_value: fearGreed?.value || null,
         classification: fearGreed?.value_classification || null
       },
-      narratives: {
-        memecoin_mania: memecoinNarrative ? {
-          score: memecoinNarrative.current_score,
-          trend: memecoinNarrative.trend
-        } : null
-      },
       example_usage: {
         base_bet: 100,
         adjusted_bet: Math.round(100 * betMultiplier),
@@ -976,6 +744,104 @@ app.get('/live/betting-context', async (_req: Request, res: Response) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to calculate betting context' });
+  }
+});
+
+// =============================================================================
+// EVENTS & NARRATIVES (REAL DATA ONLY)
+// =============================================================================
+
+/**
+ * GET /events
+ * Real economic events calendar
+ * Sources: FMP (250 req/day), Fed calendar, manual high-impact events
+ */
+app.get('/events', async (req: Request, res: Response) => {
+  try {
+    const days = parseInt(req.query.days as string) || 30;
+    const highImpactOnly = req.query.high_impact === 'true';
+
+    const events = highImpactOnly
+      ? await getHighImpactEvents()
+      : await getUpcomingEvents(days);
+
+    res.json({
+      count: events.length,
+      events,
+      sources: ['Financial Modeling Prep API', 'Federal Reserve Calendar', 'Manual curation'],
+      note: 'Real economic calendar data - no fabricated events',
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Events calendar error:', err);
+    res.status(500).json({
+      error: 'Failed to fetch economic calendar',
+      events: [],
+      note: 'Calendar temporarily unavailable'
+    });
+  }
+});
+
+/**
+ * GET /events/next-critical
+ * Next high-impact event in next 7 days
+ */
+app.get('/events/next-critical', async (_req: Request, res: Response) => {
+  try {
+    const event = await getNextCriticalEvent();
+
+    if (!event) {
+      return res.json({
+        message: 'No critical events in next 7 days',
+        event: null
+      });
+    }
+
+    res.json({
+      event,
+      timeUntil: `${Math.round((new Date(event.date).getTime() - Date.now()) / (1000 * 60 * 60))} hours`,
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Next critical event error:', err);
+    res.status(500).json({ error: 'Failed to get next critical event' });
+  }
+});
+
+/**
+ * GET /narratives
+ * Live geopolitical narrative tracking
+ * All scores calculated from real data: Fear & Greed, Polymarket, crypto prices
+ */
+app.get('/narratives', async (_req: Request, res: Response) => {
+  try {
+    // Calculate scores from real data sources
+    const scores = await calculateNarrativeScores();
+
+    // Map to narrative format
+    const narratives = Object.entries(scores).map(([id, data]) => ({
+      id,
+      name: id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      score: data.score,
+      trend: data.trend,
+      drivers: data.drivers,
+      sources: ['Fear & Greed Index', 'Polymarket', 'CoinGecko prices'],
+      timestamp: new Date().toISOString()
+    }));
+
+    res.json({
+      count: narratives.length,
+      narratives,
+      note: 'All scores calculated from live market data - no static fallbacks',
+      updated: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Narrative scoring error:', err);
+    res.status(500).json({
+      error: 'Failed to calculate narrative scores',
+      narratives: [],
+      note: 'Narrative tracking temporarily unavailable'
+    });
   }
 });
 
@@ -1168,18 +1034,6 @@ app.get('/oracle/agent/:name', async (req: Request, res: Response) => {
       alerts.push(`High risk (${riskData.score}) - Defensive positioning recommended`);
     } else if (registration.riskTolerance === 'high' && riskData.score > 85) {
       alerts.push(`Extreme risk (${riskData.score}) - Critical alert`);
-    }
-
-    // Check for upcoming high-impact events
-    const upcomingEvents = getHighImpactEvents();
-    if (upcomingEvents.length > 0 && registration.alerts.events) {
-      // Check if any events are within 24h
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const imminent = upcomingEvents.find(e => new Date(e.date) <= tomorrow);
-      if (imminent) {
-        alerts.push(`High-impact event within 24h: ${imminent.event}`);
-      }
     }
 
     res.json({
@@ -1594,14 +1448,8 @@ app.get('/oracle/risk', async (req: Request, res: Response) => {
     const riskData = await calculateDynamicRisk();
     const bias = riskData.score < 40 ? 'risk-on' : riskData.score > 60 ? 'risk-off' : 'neutral';
 
-    // Check for upcoming high-impact events
-    const upcomingEvents = getHighImpactEvents();
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const imminentEvents = upcomingEvents.filter(e => new Date(e.date) <= tomorrow);
-
     // Determine if safe to trade
-    const safeToTrade = riskData.score < 75 && imminentEvents.length === 0;
+    const safeToTrade = riskData.score < 75;
 
     // Calculate recommended max slippage based on risk
     // Low risk: 0.5%, Medium: 1.0%, High: 2.0%, Extreme: 3.0%
@@ -1617,9 +1465,6 @@ app.get('/oracle/risk', async (req: Request, res: Response) => {
     if (riskData.score > 75) {
       recommendation = 'AVOID';
       reasoning = `High risk (${riskData.score}/100). ${riskData.drivers.join('. ')}.`;
-    } else if (imminentEvents.length > 0) {
-      recommendation = 'DELAY';
-      reasoning = `High-impact event within 24h: ${imminentEvents[0].event}`;
     } else if (riskData.score > 60) {
       recommendation = 'CAUTION';
       reasoning = `Elevated risk (${riskData.score}/100). Reduce size or widen slippage.`;
@@ -1635,7 +1480,6 @@ app.get('/oracle/risk', async (req: Request, res: Response) => {
       token: token || 'any',
       strategy: strategy || 'swap',
       components: riskData.components,
-      upcomingEvents: imminentEvents.length,
       drivers: riskData.drivers,
       timestamp: new Date().toISOString(),
       note: 'Built for AgentDEX integration - risk-aware execution layer'
@@ -2717,6 +2561,14 @@ app.get('/premium/risk-detailed', async (_req: Request, res: Response) => {
  */
 app.get('/dashboard', (_req: Request, res: Response) => {
   res.redirect('/dashboard/v2');
+});
+
+/**
+ * GET /dashboard/feeds
+ * Trading floor feed stack dashboard (real-time market + geo data)
+ */
+app.get('/dashboard/feeds', (_req: Request, res: Response) => {
+  res.send(generateFeedsDashboard());
 });
 
 /**
@@ -4195,11 +4047,6 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
       <div class="loading">Loading...</div>
     </div>
 
-    <div class="card" id="narratives-card">
-      <h2>Active Narratives <span class="badge">8 TRACKED</span></h2>
-      <div class="loading">Loading...</div>
-    </div>
-
     <div class="card" id="drivers-card">
       <h2>Risk Drivers <span class="badge">AUTO</span></h2>
       <div class="loading">Loading...</div>
@@ -4232,7 +4079,6 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
     // Chart instances
     let riskChart = null;
     let fearGreedChart = null;
-    let narrativesChart = null;
 
     // Chart.js default config
     Chart.defaults.color = '#888';
@@ -4356,62 +4202,6 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
       });
     }
 
-    function createNarrativesChart(narratives) {
-      const ctx = document.getElementById('narrativesChart');
-      if (!ctx) return;
-
-      if (narrativesChart) {
-        narrativesChart.destroy();
-      }
-
-      const sortedNarratives = [...narratives].sort((a, b) => b.score - a.score);
-
-      narrativesChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: sortedNarratives.map(n => n.name.replace(/-/g, ' ').toUpperCase()),
-          datasets: [{
-            label: 'Score',
-            data: sortedNarratives.map(n => n.score),
-            backgroundColor: sortedNarratives.map(n =>
-              n.score >= 70 ? '#ff4444' :
-              n.score >= 50 ? '#ffaa00' :
-              '#00ff88'
-            ),
-            borderWidth: 0
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-              titleColor: '#00ff88',
-              bodyColor: '#fff'
-            }
-          },
-          scales: {
-            x: {
-              min: 0,
-              max: 100,
-              ticks: { color: '#666' },
-              grid: { color: '#222' }
-            },
-            y: {
-              ticks: {
-                color: '#888',
-                font: { size: 10 }
-              },
-              grid: { display: false }
-            }
-          }
-        }
-      });
-    }
-
     function updateCharts() {
       if (riskChart) {
         riskChart.data.labels = history.timestamps;
@@ -4430,11 +4220,10 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
       const fetchStart = performance.now();
 
       try {
-        const [risk, crypto, predictions, narratives, economic, commodities, apiStats] = await Promise.all([
+        const [risk, crypto, predictions, economic, commodities, apiStats] = await Promise.all([
           fetch(API + '/live/risk').then(r => r.json()),
           fetch(API + '/live/crypto').then(r => r.json()),
           fetch(API + '/live/predictions').then(r => r.json()),
-          fetch(API + '/narratives').then(r => r.json()),
           fetch(API + '/live/economic').then(r => r.json()),
           fetch(API + '/live/commodities').then(r => r.json()),
           fetch(API + '/stats').then(r => r.json())
@@ -4560,15 +4349,6 @@ app.get('/dashboard/v1', async (_req: Request, res: Response) => {
           </div>
         \`).join('') || '<div class="loading">No markets</div>';
         document.getElementById('predictions-card').innerHTML = '<h2>Prediction Markets <span class="badge">POLYMARKET</span></h2>' + predHtml;
-
-        // Narratives with chart
-        if (narratives.narratives) {
-          document.getElementById('narratives-card').innerHTML = \`
-            <h2>Active Narratives <span class="badge">8 TRACKED</span></h2>
-            <div class="chart-container" style="height: 280px;"><canvas id="narrativesChart"></canvas></div>
-          \`;
-          createNarrativesChart(narratives.narratives);
-        }
 
         // Drivers
         const driversHtml = risk.drivers?.length > 0
@@ -5379,11 +5159,6 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
       </div>
 
       <div class="panel">
-        <div class="panel-header">GEOPOLITICAL NARRATIVES <span class="panel-badge">8 TRACKED</span></div>
-        <div class="panel-content" id="narratives-panel"><div class="loading">LOADING TELEMETRY...</div></div>
-      </div>
-
-      <div class="panel">
         <div class="panel-header">ECONOMIC INDICATORS <span class="panel-badge">FED</span></div>
         <div class="panel-content" id="economic-panel"><div class="loading">LOADING TELEMETRY...</div></div>
       </div>
@@ -5468,11 +5243,10 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
       updateClock();
 
       try {
-        const [risk, crypto, predictions, narratives, economic, commodities, radu, forecast, receipts, smartMoney, network, defi] = await Promise.all([
+        const [risk, crypto, predictions, economic, commodities, radu, forecast, receipts, smartMoney, network, defi] = await Promise.all([
           fetch(API + '/live/risk').then(r => r.json()),
           fetch(API + '/live/crypto').then(r => r.json()),
           fetch(API + '/live/predictions').then(r => r.json()),
-          fetch(API + '/narratives').then(r => r.json()),
           fetch(API + '/live/economic').then(r => r.json()),
           fetch(API + '/live/commodities').then(r => r.json()),
           fetch(API + '/evaluation/radu').then(r => r.json()).catch(() => null),
@@ -5577,18 +5351,6 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
           </div>
         \`).join('') || '<div class="loading">NO DATA</div>';
         document.getElementById('predictions-panel').innerHTML = predHtml;
-
-        // Narratives
-        const narrHtml = narratives.narratives?.map(n => \`
-          <div class="narrative-row">
-            <div class="narrative-header">
-              <span class="narrative-name">\${n.name}</span>
-              <span class="narrative-score">\${n.score}</span>
-            </div>
-            <div class="narrative-bar"><div class="narrative-bar-fill" style="width: \${n.score}%"></div></div>
-          </div>
-        \`).join('') || '';
-        document.getElementById('narratives-panel').innerHTML = narrHtml;
 
         // Drivers
         const driversHtml = risk.drivers?.length > 0
@@ -5785,8 +5547,8 @@ app.listen(PORT, '0.0.0.0', () => {
 ╠═══════════════════════════════════════════════════════════════╣
 ║  Endpoints:                                                   ║
 ║    GET /risk          - Global macro risk score               ║
-║    GET /narratives    - Active geopolitical narratives        ║
-║    GET /events        - Upcoming macro events                 ║
+║    GET /live/risk     - Real-time risk assessment             ║
+║    GET /live/world    - Complete world state snapshot         ║
 ║    POST /subscribe    - Register your integration             ║
 ╠═══════════════════════════════════════════════════════════════╣
 ║  Server running on port ${PORT}                                  ║
@@ -6456,75 +6218,6 @@ app.get('/predictions/successful', (req: Request, res: Response) => {
   }
 });
 
-// =============================================================================
-// ENHANCED MACRO EVENTS CALENDAR
-// =============================================================================
-
-/**
- * GET /events/enhanced
- * Enhanced event calendar with impact predictions and positioning advice
- */
-app.get('/events/enhanced', async (_req: Request, res: Response) => {
-  try {
-    const { getEnhancedEvents } = await import('./services/enhancedEvents');
-    const events = await getEnhancedEvents();
-    res.json({ events, count: events.length });
-  } catch (error) {
-    console.error('Enhanced events error:', error);
-    res.status(500).json({ error: 'Failed to get enhanced events' });
-  }
-});
-
-/**
- * GET /events/high-impact
- * High-impact events only (>75 impact score)
- */
-app.get('/events/high-impact', async (_req: Request, res: Response) => {
-  try {
-    const { getHighImpactEvents } = await import('./services/enhancedEvents');
-    const events = await getHighImpactEvents();
-    res.json({ events, count: events.length });
-  } catch (error) {
-    console.error('High-impact events error:', error);
-    res.status(500).json({ error: 'Failed to get high-impact events' });
-  }
-});
-
-/**
- * GET /events/next-critical
- * Next critical event in next 7 days
- */
-app.get('/events/next-critical', async (_req: Request, res: Response) => {
-  try {
-    const { getNextCriticalEvent } = await import('./services/enhancedEvents');
-    const event = await getNextCriticalEvent();
-    res.json(event || { message: 'No critical events in next 7 days' });
-  } catch (error) {
-    console.error('Next critical event error:', error);
-    res.status(500).json({ error: 'Failed to get next critical event' });
-  }
-});
-
-/**
- * GET /events/:id/preparation
- * Event-specific preparation checklist
- */
-app.get('/events/:id/preparation', async (req: Request, res: Response) => {
-  try {
-    const { getEventPreparation } = await import('./services/enhancedEvents');
-    const { id } = req.params;
-    const preparation = await getEventPreparation(id);
-
-    if (!preparation) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    res.json(preparation);
-  } catch (error) {
-    console.error('Event preparation error:', error);
-    res.status(500).json({ error: 'Failed to get event preparation' });
-  }
-});
 
 // =============================================================================
 // MARKET REGIME DETECTION
@@ -6592,14 +6285,6 @@ app.get('/macro/unified', async (_req: Request, res: Response) => {
     const fearGreedData = await fetchFearGreed();
     const fearGreedValue = fearGreedData?.value || 50;
 
-    const currentNarratives = narratives.map(n => ({
-      id: n.id,
-      name: n.name,
-      current_score: n.current_score,
-      trend: n.trend || 'stable',
-      suggested_action: n.crypto_impact.suggested_action
-    }));
-
     // Fetch Macro Oracle TradFi data
     let macroOracleData: any = null;
     try {
@@ -6627,9 +6312,7 @@ app.get('/macro/unified', async (_req: Request, res: Response) => {
                                    fearGreedValue < 40 ? 'fear' :
                                    fearGreedValue < 60 ? 'neutral' :
                                    fearGreedValue < 80 ? 'greed' : 'extreme_greed',
-        memecoin_sentiment: narratives.find((n: Narrative) => n.id === 'memecoin-mania')?.current_score || 0,
         defi_health: wargamesRisk.score < 40 ? 'healthy' : wargamesRisk.score < 70 ? 'moderate' : 'stressed',
-        narratives: currentNarratives,
         top_drivers: wargamesRisk.drivers.slice(0, 3)
       },
 

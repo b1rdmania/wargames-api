@@ -72,6 +72,141 @@ export interface ProtocolData {
   updated: string;
 }
 
+// Feed types
+export interface FeedMetadata {
+  provider: string;
+  fetchedAt: string;
+  ttlMs: number;
+  freshness: 'realtime' | 'delayed' | 'eod' | 'daily' | 'monthly';
+  warnings: string[];
+}
+
+export interface FeedResponse<T> {
+  data: T;
+  metadata: FeedMetadata;
+}
+
+export interface NewsItem {
+  headline: string;
+  source: string;
+  timestamp: string;
+  importance: number;
+  category: 'macro' | 'geopolitics' | 'markets' | 'crypto' | 'energy' | 'other';
+  url?: string;
+}
+
+export interface NewsData {
+  breaking: NewsItem[];
+  recent: NewsItem[];
+}
+
+export interface MarketTicker {
+  symbol: string;
+  value: number;
+  change_24h: number | null;
+  timestamp: string;
+  unit: string;
+  note?: string;
+}
+
+export interface MarketsData {
+  tape: MarketTicker[];
+  index: Record<string, MarketTicker>;
+}
+
+export interface VolTicker {
+  symbol: string;
+  value: number | null;
+  change_24h: number | null;
+  percentile_30d?: number;
+  status: 'normal' | 'elevated' | 'extreme';
+  timestamp: string;
+  note?: string;
+}
+
+export interface VolData {
+  indices: VolTicker[];
+  volatility: VolTicker[];
+  summary: {
+    regime: 'risk-on' | 'neutral' | 'risk-off';
+    vix_level: 'low' | 'normal' | 'elevated' | 'extreme';
+  };
+}
+
+export interface CommodityTicker {
+  symbol: string;
+  value: number;
+  change_24h: number | null;
+  change_7d: number | null;
+  unit: string;
+  timestamp: string;
+  frequency: 'daily' | 'monthly';
+  note?: string;
+}
+
+export interface CommoditiesData {
+  energy: CommodityTicker[];
+  metals: CommodityTicker[];
+  summary: {
+    energy_stress: number;
+    inflation_signal: 'deflationary' | 'neutral' | 'inflationary';
+  };
+}
+
+export interface GeoEvent {
+  region: string;
+  country?: string;
+  intensity: number;
+  event_type: 'military' | 'diplomatic' | 'economic' | 'other';
+  headline: string;
+  timestamp: string;
+  source: string;
+  url?: string;
+}
+
+export interface GeoData {
+  events: GeoEvent[];
+  hotspots: Array<{
+    region: string;
+    event_count: number;
+    avg_intensity: number;
+  }>;
+  sanctions_updates: any[];
+}
+
+export interface CreditSpread {
+  type: 'IG' | 'HY' | 'EM';
+  oas: number | null;
+  change_24h: number | null;
+  percentile_1y: number;
+  status: 'tight' | 'normal' | 'widening' | 'stress';
+  timestamp: string;
+  note?: string;
+}
+
+export interface CreditData {
+  spreads: CreditSpread[];
+  summary: {
+    systemic_stress: number;
+    regime: 'low_stress' | 'moderate' | 'elevated' | 'crisis';
+    note: string;
+  };
+}
+
+export interface TapeData {
+  breaking_news: NewsItem[];
+  tape: Array<{
+    category: 'fx' | 'rates' | 'indices' | 'vol' | 'commodities' | 'credit';
+    items: Array<MarketTicker | VolTicker | CommodityTicker | CreditSpread>;
+  }>;
+  geo: GeoEvent[];
+  summary: {
+    market_regime: 'risk-on' | 'neutral' | 'risk-off';
+    systemic_stress: number;
+    top_risks: string[];
+  };
+}
+
 // Configuration
 export interface WARGAMESConfig {
   baseURL?: string;
@@ -84,8 +219,110 @@ export class WARGAMES {
   private timeout: number;
 
   constructor(config: WARGAMESConfig = {}) {
-    this.baseURL = config.baseURL || 'https://wargames-api.vercel.app';
+    this.baseURL = config.baseURL || 'https://wargames-api.fly.dev';
     this.timeout = config.timeout || 10000;
+  }
+
+  /**
+   * Live feed endpoints - Real-time market and geopolitical data
+   */
+  get live() {
+    return {
+      /**
+       * Get breaking news with importance scoring
+       * @returns {Promise<FeedResponse<NewsData>>} Breaking and recent news
+       *
+       * @example
+       * const { data, metadata } = await wargames.live.news();
+       * data.breaking.forEach(item => {
+       *   if (item.importance > 80) console.log(`Critical: ${item.headline}`);
+       * });
+       */
+      news: (): Promise<FeedResponse<NewsData>> => {
+        return this.fetch<FeedResponse<NewsData>>('/live/news');
+      },
+
+      /**
+       * Get FX rates and US rates (FRED + Frankfurter)
+       * @returns {Promise<FeedResponse<MarketsData>>} Market data
+       *
+       * @example
+       * const { data } = await wargames.live.markets();
+       * const dxy = data.index['DXY'];
+       * const ust10y = data.index['UST_10Y'];
+       */
+      markets: (): Promise<FeedResponse<MarketsData>> => {
+        return this.fetch<FeedResponse<MarketsData>>('/live/markets');
+      },
+
+      /**
+       * Get equity indices and VIX volatility
+       * @returns {Promise<FeedResponse<VolData>>} Volatility data
+       *
+       * @example
+       * const { data } = await wargames.live.vol();
+       * if (data.summary.regime === 'risk-off') {
+       *   console.log('Risk-off regime detected');
+       * }
+       */
+      vol: (): Promise<FeedResponse<VolData>> => {
+        return this.fetch<FeedResponse<VolData>>('/live/vol');
+      },
+
+      /**
+       * Get commodity prices (energy + metals)
+       * @returns {Promise<FeedResponse<CommoditiesData>>} Commodity data
+       *
+       * @example
+       * const { data } = await wargames.live.commodities();
+       * if (data.summary.energy_stress > 70) {
+       *   console.log('Energy markets stressed');
+       * }
+       */
+      commodities: (): Promise<FeedResponse<CommoditiesData>> => {
+        return this.fetch<FeedResponse<CommoditiesData>>('/live/commodities');
+      },
+
+      /**
+       * Get geopolitical events with intensity scoring
+       * @returns {Promise<FeedResponse<GeoData>>} Geopolitical events
+       *
+       * @example
+       * const { data } = await wargames.live.geo();
+       * const highTension = data.events.filter(e => e.intensity > 80);
+       */
+      geo: (): Promise<FeedResponse<GeoData>> => {
+        return this.fetch<FeedResponse<GeoData>>('/live/geo');
+      },
+
+      /**
+       * Get credit spreads (IG/HY/EM)
+       * @returns {Promise<FeedResponse<CreditData>>} Credit spread data
+       *
+       * @example
+       * const { data } = await wargames.live.credit();
+       * if (data.summary.systemic_stress > 70) {
+       *   console.log('Credit markets showing stress');
+       * }
+       */
+      credit: (): Promise<FeedResponse<CreditData>> => {
+        return this.fetch<FeedResponse<CreditData>>('/live/credit');
+      },
+
+      /**
+       * Get unified trading floor feed (aggregates all above)
+       * @returns {Promise<FeedResponse<TapeData>>} Complete market snapshot
+       *
+       * @example
+       * const { data } = await wargames.live.tape();
+       * console.log(`Regime: ${data.summary.market_regime}`);
+       * console.log(`Stress: ${data.summary.systemic_stress}/100`);
+       * data.summary.top_risks.forEach(risk => console.log(`- ${risk}`));
+       */
+      tape: (): Promise<FeedResponse<TapeData>> => {
+        return this.fetch<FeedResponse<TapeData>>('/live/tape');
+      }
+    };
   }
 
   /**

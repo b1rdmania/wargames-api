@@ -46,17 +46,8 @@ export async function generate48hForecast(): Promise<Forecast48h> {
   const forecastId = generateForecastId();
   const validUntil = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
 
-  // Gather upcoming events from enhanced events calendar
-  const { getEnhancedEvents } = await import('./enhancedEvents');
-  const events = await getEnhancedEvents();
-
-  // Filter to next 48h
-  const fortyEightHoursFromNow = now.getTime() + 48 * 60 * 60 * 1000;
-  const upcomingEvents = events.filter(e => {
-    const eventTime = new Date(e.date).getTime();
-    return eventTime > now.getTime() && eventTime < fortyEightHoursFromNow;
-  });
-
+  // No upcoming events - this feature has been deprecated
+  const upcomingEvents: any[] = [];
   const windows: ForecastWindow[] = [];
 
   // Add event-driven windows

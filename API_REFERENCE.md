@@ -1,10 +1,450 @@
 # WARGAMES API Reference
 
-**Base URL:** `https://wargames-api.vercel.app`
-**Version:** 1.0.0
-**Last Updated:** 2026-02-03
+**Base URL:** `https://wargames-api.fly.dev`
+**Version:** 1.1.0
+**Last Updated:** 2026-02-06
 
 Complete endpoint documentation for the WARGAMES macro intelligence API.
+
+---
+
+## Trading Floor Feed Stack ⭐ NEW
+
+Complete trading-floor data layer with 7 unified feed endpoints. All endpoints return consistent `FeedResponse` format with graceful degradation.
+
+### Common Response Format
+
+All feed endpoints return this structure:
+
+```json
+{
+  "data": { /* endpoint-specific data */ },
+  "metadata": {
+    "provider": "FRED + Frankfurter",
+    "fetchedAt": "2026-02-06T16:25:00Z",
+    "ttlMs": 21600000,
+    "freshness": "daily",
+    "warnings": ["Copper data is monthly, not daily"]
+  }
+}
+```
+
+**Metadata Fields:**
+- `provider` (string): Data source(s) used
+- `fetchedAt` (string): ISO timestamp of fetch
+- `ttlMs` (number): Cache time-to-live in milliseconds
+- `freshness` (string): Data freshness level - `realtime`, `delayed`, `eod`, `daily`, `monthly`
+- `warnings` (string[]): Non-fatal issues (missing data, partial results, etc.)
+
+### GET /live/news
+
+Breaking news with importance scoring from GDELT.
+
+**Update Frequency:** 1 minute
+**Cache TTL:** 60 seconds
+**Source:** GDELT Global Event Database
+
+**Response:**
+```json
+{
+  "data": {
+    "breaking": [
+      {
+        "headline": "Fed signals pause in rate cuts amid inflation concerns",
+        "source": "Reuters",
+        "timestamp": "2026-02-06T15:30:00Z",
+        "importance": 92,
+        "category": "macro",
+        "url": "https://..."
+      }
+    ],
+    "recent": [ /* last 20 articles */ ]
+  },
+  "metadata": {
+    "provider": "GDELT",
+    "fetchedAt": "2026-02-06T16:25:00Z",
+    "ttlMs": 60000,
+    "freshness": "realtime",
+    "warnings": []
+  }
+}
+```
+
+**Importance Scoring:**
+- Base score from recency (newer = higher)
+- Keyword boosts: FOMC +30, CPI +28, sanctions +22, war +25, nuclear +30
+- Category boosts: macro +15, geopolitics +12
+- Source credibility weighting
+
+**Categories:** `macro`, `geopolitics`, `markets`, `crypto`, `energy`, `other`
+
+### GET /live/markets
+
+FX rates (Frankfurter) + US rates (FRED).
+
+**Update Frequency:** 6 hours
+**Cache TTL:** 6 hours (21600000ms)
+**Sources:** FRED (Federal Reserve Economic Data), Frankfurter (ECB)
+
+**Response:**
+```json
+{
+  "data": {
+    "tape": [
+      {
+        "symbol": "EURUSD",
+        "value": 1.1794,
+        "change_24h": null,
+        "timestamp": "2026-02-06T16:00:00Z",
+        "unit": "ratio"
+      },
+      {
+        "symbol": "DXY",
+        "value": 117.90,
+        "change_24h": 0.39,
+        "timestamp": "2026-01-30T16:00:00Z",
+        "unit": "points",
+        "note": "Trade-weighted USD index (FRED: DTWEXBGS, daily close)"
+      },
+      {
+        "symbol": "UST_10Y",
+        "value": 4.29,
+        "change_24h": 0.01,
+        "timestamp": "2026-02-04T16:00:00Z",
+        "unit": "%"
+      }
+    ],
+    "index": {
+      "EURUSD": { /* same as tape item */ },
+      "DXY": { /* ... */ }
+    }
+  },
+  "metadata": {
+    "provider": "FRED + Frankfurter",
+    "fetchedAt": "2026-02-06T16:25:00Z",
+    "ttlMs": 21600000,
+    "freshness": "daily",
+    "warnings": []
+  }
+}
+```
+
+**Symbols:**
+- **FX:** EURUSD, USDJPY, GBPUSD (ECB rates via Frankfurter)
+- **Index:** DXY (USD trade-weighted index, FRED: DTWEXBGS)
+- **Rates:** UST_2Y (FRED: DGS2), UST_10Y (FRED: DGS10), SOFR, EFFR
+
+### GET /live/vol
+
+Equity indices + VIX volatility regime.
+
+**Update Frequency:** 6 hours
+**Cache TTL:** 6 hours
+**Source:** FRED
+
+**Response:**
+```json
+{
+  "data": {
+    "indices": [
+      {
+        "symbol": "SPX",
+        "value": 6798.4,
+        "change_24h": -1.23,
+        "percentile_30d": 50,
+        "status": "normal",
+        "timestamp": "2026-02-05T21:00:00Z",
+        "note": "S&P 500 daily close (FRED: SP500)"
+      }
+    ],
+    "volatility": [
+      {
+        "symbol": "VIX",
+        "value": 21.77,
+        "change_24h": 3.13,
+        "percentile_30d": 75,
+        "status": "elevated",
+        "timestamp": "2026-02-05T21:00:00Z"
+      }
+    ],
+    "summary": {
+      "regime": "neutral",
+      "vix_level": "elevated"
+    }
+  },
+  "metadata": {
+    "provider": "FRED",
+    "fetchedAt": "2026-02-06T16:25:00Z",
+    "ttlMs": 21600000,
+    "freshness": "eod",
+    "warnings": ["MOVE index unavailable (paid data only)"]
+  }
+}
+```
+
+**Regime Calculation:**
+- **risk-on:** VIX < 15 AND SPX change > 0
+- **risk-off:** VIX > 25 OR SPX change < -2%
+- **neutral:** Everything else
+
+**Indices:** SPX (FRED: SP500), NDX (FRED: NASDAQCOM)
+**Volatility:** VIX (FRED: VIXCLS), MOVE (unavailable - paid data)
+
+### GET /live/commodities
+
+Energy + metals with stress indicators.
+
+**Update Frequency:** 6 hours
+**Cache TTL:** 6 hours
+**Source:** FRED
+
+**Response:**
+```json
+{
+  "data": {
+    "energy": [
+      {
+        "symbol": "WTI",
+        "value": 61.6,
+        "change_24h": -4.50,
+        "change_7d": null,
+        "unit": "USD/bbl",
+        "timestamp": "2026-02-02T16:00:00Z",
+        "frequency": "daily"
+      }
+    ],
+    "metals": [
+      {
+        "symbol": "COPPER",
+        "value": 11790.96,
+        "change_24h": null,
+        "change_7d": null,
+        "unit": "USD/ton",
+        "timestamp": "2025-12-01T00:00:00Z",
+        "frequency": "monthly",
+        "note": "Monthly data only (FRED: PCOPPUSDM)"
+      }
+    ],
+    "summary": {
+      "energy_stress": 100,
+      "inflation_signal": "neutral"
+    }
+  },
+  "metadata": {
+    "provider": "FRED",
+    "fetchedAt": "2026-02-06T16:25:00Z",
+    "ttlMs": 21600000,
+    "freshness": "daily",
+    "warnings": ["Copper data is monthly, not daily"]
+  }
+}
+```
+
+**Energy:** WTI (FRED: DCOILWTICO), Brent (FRED: DCOILBRENTEU), Nat Gas (FRED: DHHNGSP)
+**Metals:** Gold (FRED: GOLDAMGBD228NLBM), Copper (FRED: PCOPPUSDM - monthly only)
+
+**Energy Stress Score (0-100):**
+- Oil volatility (30d rolling)
+- Price level deviation from mean
+- Natural gas moves
+
+**Inflation Signal:**
+- `deflationary`: Oil + gold both falling
+- `inflationary`: Both rising strongly
+- `neutral`: Mixed or weak signals
+
+### GET /live/geo
+
+Geopolitical events with intensity scoring.
+
+**Update Frequency:** 15 minutes
+**Cache TTL:** 15 minutes (900000ms)
+**Source:** GDELT
+
+**Response:**
+```json
+{
+  "data": {
+    "events": [
+      {
+        "region": "Middle East",
+        "country": "Iran",
+        "intensity": 100,
+        "event_type": "military",
+        "headline": "Iran and US agree to hold nuclear talks Friday in Oman",
+        "timestamp": "20260205T201500Z",
+        "source": "GDELT",
+        "url": "https://..."
+      }
+    ],
+    "hotspots": [
+      {
+        "region": "Middle East",
+        "event_count": 1,
+        "avg_intensity": 100
+      }
+    ],
+    "sanctions_updates": []
+  },
+  "metadata": {
+    "provider": "GDELT",
+    "fetchedAt": "2026-02-06T16:25:00Z",
+    "ttlMs": 900000,
+    "freshness": "realtime",
+    "warnings": []
+  }
+}
+```
+
+**Intensity Scoring:**
+- Base: 50
+- Keywords: missile +25, nuclear +30, war +25, sanctions +20, strike +22
+
+**Regions:** Middle East, East Asia, Europe, Latin America, South Asia, Africa, Global
+**Event Types:** `military`, `diplomatic`, `economic`, `other`
+
+### GET /live/credit
+
+Credit spreads (IG/HY) + systemic stress score.
+
+**Update Frequency:** 6 hours
+**Cache TTL:** 6 hours
+**Source:** FRED
+
+**Response:**
+```json
+{
+  "data": {
+    "spreads": [
+      {
+        "type": "IG",
+        "oas": 0.76,
+        "change_24h": 0.01,
+        "percentile_1y": 25,
+        "status": "tight",
+        "timestamp": "2026-02-05T16:00:00Z"
+      },
+      {
+        "type": "HY",
+        "oas": 2.97,
+        "change_24h": 0.11,
+        "percentile_1y": 25,
+        "status": "tight",
+        "timestamp": "2026-02-05T16:00:00Z"
+      }
+    ],
+    "summary": {
+      "systemic_stress": 23,
+      "regime": "low_stress",
+      "note": "Credit conditions stable"
+    }
+  },
+  "metadata": {
+    "provider": "FRED",
+    "fetchedAt": "2026-02-06T16:25:00Z",
+    "ttlMs": 21600000,
+    "freshness": "daily",
+    "warnings": ["EM spreads unavailable (paid data only)"]
+  }
+}
+```
+
+**Spreads:**
+- **IG:** Investment Grade OAS (FRED: BAMLC0A0CM)
+- **HY:** High Yield OAS (FRED: BAMLH0A0HYM2)
+- **EM:** Emerging Markets (unavailable - paid data)
+
+**Systemic Stress Formula (0-100):**
+- (IG percentile × 0.4) + (HY percentile × 0.5) + velocity penalty
+- **<30:** low_stress
+- **30-50:** moderate
+- **50-70:** elevated
+- **≥70:** crisis
+
+### GET /live/tape
+
+Unified trading floor feed - aggregates all above.
+
+**Update Frequency:** 1 minute
+**Cache TTL:** 1 minute
+**Sources:** GDELT + FRED + Frankfurter
+
+**Response:**
+```json
+{
+  "data": {
+    "breaking_news": [ /* top 5 from /live/news */ ],
+    "tape": [
+      {
+        "category": "fx",
+        "items": [ /* FX rates */ ]
+      },
+      {
+        "category": "rates",
+        "items": [ /* UST 2Y/10Y, SOFR, EFFR */ ]
+      },
+      {
+        "category": "indices",
+        "items": [ /* SPX, NDX */ ]
+      },
+      {
+        "category": "vol",
+        "items": [ /* VIX, MOVE */ ]
+      },
+      {
+        "category": "commodities",
+        "items": [ /* WTI, Brent, Gold, Copper, Nat Gas */ ]
+      },
+      {
+        "category": "credit",
+        "items": [ /* IG, HY, EM spreads */ ]
+      }
+    ],
+    "geo": [ /* top 5 geopolitical events */ ],
+    "summary": {
+      "market_regime": "neutral",
+      "systemic_stress": 23,
+      "top_risks": [
+        "Iran and US agree to hold nuclear talks Friday in Oman as Tr... (intensity: 100)",
+        "Oil volatility elevated"
+      ]
+    }
+  },
+  "metadata": {
+    "provider": "GDELT + FRED + Frankfurter",
+    "fetchedAt": "2026-02-06T16:25:00Z",
+    "ttlMs": 60000,
+    "freshness": "mixed",
+    "warnings": [
+      "Most data is daily close (not realtime)",
+      "MOVE index unavailable",
+      "EM spreads unavailable"
+    ]
+  }
+}
+```
+
+**Use Cases:**
+- **Single API call** for complete market snapshot
+- **Market regime detection** (risk-on/neutral/risk-off)
+- **Systemic stress monitoring** (0-100 score)
+- **Top risks identification** (geo + market stress)
+
+**SDK Usage:**
+```typescript
+import { WARGAMES } from '@wargames/sdk';
+
+const wargames = new WARGAMES();
+const { data } = await wargames.live.tape();
+
+console.log(`Regime: ${data.summary.market_regime}`);
+console.log(`Stress: ${data.summary.systemic_stress}/100`);
+data.summary.top_risks.forEach(risk => console.log(`- ${risk}`));
+
+if (data.summary.market_regime === 'risk-off') {
+  // Reduce exposure
+}
+```
 
 ---
 
