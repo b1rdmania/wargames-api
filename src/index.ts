@@ -19,7 +19,7 @@ import {
   fetchCryptoPrices,
   fetchPolymarketOdds,
   fetchEconomicIndicators,
-  fetchCommodities,
+  fetchCommodities as fetchCommoditiesLegacy,
   fetchWeather,
   fetchWorldState,
   calculateDynamicRisk,
@@ -68,6 +68,13 @@ import {
   protocolHealthHandler
 } from './services/tradingRiskEndpoints';
 import { generateBacktestData, calculateBacktestMetrics } from './data/backtest';
+import { fetchNews } from './services/feeds/news';
+import { fetchMarkets } from './services/feeds/markets';
+import { fetchVolatility } from './services/feeds/volatility';
+import { fetchCommodities } from './services/feeds/commodities';
+import { fetchGeopolitics } from './services/feeds/geopolitics';
+import { fetchCredit } from './services/feeds/credit';
+import { fetchTape } from './services/feeds/tape';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -858,7 +865,7 @@ app.get('/live/economic', async (_req: Request, res: Response) => {
  */
 app.get('/live/commodities', async (_req: Request, res: Response) => {
   try {
-    const commodities = await fetchCommodities();
+    const commodities = await fetchCommoditiesLegacy();
     res.json({
       count: commodities.length,
       commodities,
@@ -1731,6 +1738,119 @@ app.get('/data/backtest', (_req: Request, res: Response) => {
       liquidity: 'Liquidity stress prediction vs actual spreads'
     }
   });
+});
+
+// =============================================================================
+// FEED STACK - Trading Floor Control Centre
+// Free sources only: FRED, GDELT, Frankfurter, OFAC
+// =============================================================================
+
+/**
+ * GET /live/news
+ * Breaking news wire with importance scoring
+ * Source: GDELT
+ */
+app.get('/live/news', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchNews();
+    res.json(data);
+  } catch (error) {
+    console.error('News feed error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch news feed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /live/markets
+ * FX + rates tape (daily close data)
+ * Sources: FRED (rates, DXY), Frankfurter (FX)
+ */
+app.get('/live/markets', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchMarkets();
+    res.json(data);
+  } catch (error) {
+    console.error('Markets feed error:', error);
+    res.status(500).json({ error: 'Failed to fetch markets feed' });
+  }
+});
+
+/**
+ * GET /live/vol
+ * Equity indices + volatility (daily close)
+ * Source: FRED
+ */
+app.get('/live/vol', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchVolatility();
+    res.json(data);
+  } catch (error) {
+    console.error('Volatility feed error:', error);
+    res.status(500).json({ error: 'Failed to fetch volatility feed' });
+  }
+});
+
+/**
+ * GET /live/commodities
+ * Energy + metals (daily/monthly data)
+ * Source: FRED
+ */
+app.get('/live/commodities', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchCommodities();
+    res.json(data);
+  } catch (error) {
+    console.error('Commodities feed error:', error);
+    res.status(500).json({ error: 'Failed to fetch commodities feed' });
+  }
+});
+
+/**
+ * GET /live/geo
+ * Geopolitical event feed with intensity scoring
+ * Sources: GDELT, OFAC (optional)
+ */
+app.get('/live/geo', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchGeopolitics();
+    res.json(data);
+  } catch (error) {
+    console.error('Geopolitics feed error:', error);
+    res.status(500).json({ error: 'Failed to fetch geopolitics feed' });
+  }
+});
+
+/**
+ * GET /live/credit
+ * Credit spreads + systemic stress
+ * Source: FRED
+ */
+app.get('/live/credit', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchCredit();
+    res.json(data);
+  } catch (error) {
+    console.error('Credit feed error:', error);
+    res.status(500).json({ error: 'Failed to fetch credit feed' });
+  }
+});
+
+/**
+ * GET /live/tape
+ * Unified control-centre payload (aggregates all feeds)
+ * Single endpoint for dashboard consumption
+ */
+app.get('/live/tape', async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchTape();
+    res.json(data);
+  } catch (error) {
+    console.error('Tape feed error:', error);
+    res.status(500).json({ error: 'Failed to fetch unified tape' });
+  }
 });
 
 /**

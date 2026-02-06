@@ -15,7 +15,7 @@ interface CacheEntry<T> {
 
 const cache: Map<string, CacheEntry<any>> = new Map();
 
-function getCached<T>(key: string): T | null {
+export function getCached<T>(key: string): T | null {
   const entry = cache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > entry.ttl) {
@@ -25,7 +25,7 @@ function getCached<T>(key: string): T | null {
   return entry.data;
 }
 
-function setCache<T>(key: string, data: T, ttlMs: number): void {
+export function setCache<T>(key: string, data: T, ttlMs: number): void {
   cache.set(key, {
     data,
     timestamp: Date.now(),
