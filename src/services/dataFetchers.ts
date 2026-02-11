@@ -5,6 +5,13 @@
  * All APIs are free tier / no auth required
  */
 
+// Fetch with timeout to prevent slow APIs from hanging responses
+export function fetchWithTimeout(url: string, timeoutMs: number = 5000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeout));
+}
+
 // Cache to avoid hammering APIs
 interface CacheEntry<T> {
   data: T;
@@ -66,7 +73,7 @@ export async function fetchFearGreed(): Promise<FearGreedData | null> {
   if (cached) return cached;
 
   try {
-    const res = await fetch('https://api.alternative.me/fng/?limit=1');
+    const res = await fetchWithTimeout('https://api.alternative.me/fng/?limit=1');
     const json = await res.json() as { data?: Array<{ value: string; value_classification: string; timestamp: string; time_until_update: string }> };
 
     if (json.data && json.data[0]) {
@@ -126,7 +133,7 @@ export async function fetchPolymarketOdds(): Promise<PolymarketEvent[]> {
 
   try {
     // Fetch from gamma API (public market data)
-    const res = await fetch('https://gamma-api.polymarket.com/markets?limit=100&active=true&closed=false');
+    const res = await fetchWithTimeout('https://gamma-api.polymarket.com/markets?limit=100&active=true&closed=false', 8000);
     const markets = await res.json() as PolymarketMarket[];
 
     // Filter for geopolitically relevant markets
@@ -201,8 +208,9 @@ export async function fetchCryptoPrices(): Promise<CryptoPrice[]> {
   if (cached) return cached;
 
   try {
-    const coins = 'bitcoin,ethereum,solana,bonk,dogwifhat,jupiter,raydium,marinade';
-    const res = await fetch(
+    // Include tokens needed by narrative scoring: memecoins, AI tokens, DeFi tokens
+    const coins = 'bitcoin,ethereum,solana,bonk,dogwifhat,jupiter,raydium,marinade,dogecoin,shiba-inu,pepe,render-token,fetch-ai,singularitynet,worldcoin,uniswap,aave,maker,lido-dao,curve-dao-token';
+    const res = await fetchWithTimeout(
       `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${coins}&order=market_cap_desc`
     );
     const data = await res.json() as CoinGeckoMarket[];
@@ -265,32 +273,40 @@ export async function fetchWeather(): Promise<WeatherData[]> {
   const cached = getCached<WeatherData[]>('weather');
   if (cached) return cached;
 
-  const weatherData: WeatherData[] = [];
-
   try {
-    for (const loc of KEY_LOCATIONS) {
-      const res = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,precipitation,wind_speed_10m,weather_code`
-      );
-      const data = await res.json() as OpenMeteoResponse;
+    // Fetch all locations in parallel instead of sequentially
+    const results = await Promise.allSettled(
+      KEY_LOCATIONS.map(async (loc) => {
+        const res = await fetchWithTimeout(
+          `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,precipitation,wind_speed_10m,weather_code`,
+          3000
+        );
+        const data = await res.json() as OpenMeteoResponse;
+        if (data.current) {
+          return {
+            location: loc.name,
+            temperature: data.current.temperature_2m,
+            conditions: weatherCodeToText(data.current.weather_code),
+            precipitation: data.current.precipitation || 0,
+            wind_speed: data.current.wind_speed_10m
+          } as WeatherData;
+        }
+        return null;
+      })
+    );
 
-      if (data.current) {
-        weatherData.push({
-          location: loc.name,
-          temperature: data.current.temperature_2m,
-          conditions: weatherCodeToText(data.current.weather_code),
-          precipitation: data.current.precipitation || 0,
-          wind_speed: data.current.wind_speed_10m
-        });
-      }
-    }
+    const weatherData = results
+      .filter((r): r is PromiseFulfilledResult<WeatherData | null> => r.status === 'fulfilled')
+      .map(r => r.value)
+      .filter((d): d is WeatherData => d !== null);
 
     setCache('weather', weatherData, 30 * 60 * 1000); // 30 min cache
+    return weatherData;
   } catch (err) {
     console.error('Weather fetch failed:', err);
   }
 
-  return weatherData;
+  return [];
 }
 
 function weatherCodeToText(code: number): string {
@@ -318,66 +334,94 @@ export interface EconomicIndicator {
   trend: 'up' | 'down' | 'stable';
 }
 
-// Fallback static data with realistic current values
-// In production, these would come from FRED API
+// Yahoo Finance helper - fetch a single symbol's current price
+async function fetchYahooQuote(symbol: string): Promise<{ price: number; prevClose: number; name: string } | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`,
+      5000
+    );
+    // Yahoo Finance requires User-Agent header from browser context
+    // In Node.js fetch this is set automatically, but we parse the response
+    const data = await res.json() as any;
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (meta) {
+      return {
+        price: meta.regularMarketPrice,
+        prevClose: meta.chartPreviousClose || meta.regularMarketPrice,
+        name: meta.shortName || symbol
+      };
+    }
+  } catch (err) {
+    console.error(`Yahoo Finance fetch failed for ${symbol}:`, err);
+  }
+  return null;
+}
+
+// Live economic indicators from Yahoo Finance + clearly labeled static data
 export async function fetchEconomicIndicators(): Promise<EconomicIndicator[]> {
   const cached = getCached<EconomicIndicator[]>('economic');
   if (cached) return cached;
 
-  // These are approximations based on current (Feb 2026) conditions
-  // TODO: Integrate real FRED API with key
-  const indicators: EconomicIndicator[] = [
-    {
-      id: 'fed-rate',
-      name: 'Fed Funds Rate',
-      value: 4.50,
-      unit: '%',
-      date: '2026-02-01',
-      trend: 'stable'
-    },
-    {
-      id: 'cpi',
-      name: 'CPI (YoY)',
-      value: 2.9,
-      unit: '%',
-      date: '2026-01-15',
-      trend: 'down'
-    },
-    {
-      id: 'unemployment',
-      name: 'Unemployment Rate',
-      value: 4.1,
-      unit: '%',
-      date: '2026-02-01',
-      trend: 'stable'
-    },
-    {
-      id: 'gdp-growth',
-      name: 'GDP Growth (QoQ)',
-      value: 2.3,
-      unit: '%',
-      date: '2026-01-25',
-      trend: 'stable'
-    },
-    {
-      id: 'dxy',
-      name: 'Dollar Index (DXY)',
-      value: 104.2,
-      unit: '',
-      date: new Date().toISOString().split('T')[0],
-      trend: 'up'
-    },
-    {
+  // Fetch live market data in parallel
+  const [vix, dxy, treasury10y, tbill13w] = await Promise.all([
+    fetchYahooQuote('^VIX'),
+    fetchYahooQuote('DX-Y.NYB'),
+    fetchYahooQuote('^TNX'),
+    fetchYahooQuote('^IRX'),
+  ]);
+
+  const today = new Date().toISOString().split('T')[0];
+  const indicators: EconomicIndicator[] = [];
+
+  // LIVE data from Yahoo Finance
+  if (vix) {
+    const change = vix.price - vix.prevClose;
+    indicators.push({
       id: 'vix',
       name: 'VIX (Fear Index)',
-      value: 18.5,
+      value: Math.round(vix.price * 100) / 100,
       unit: '',
-      date: new Date().toISOString().split('T')[0],
-      trend: 'stable'
-    }
-  ];
+      date: today,
+      trend: change > 1 ? 'up' : change < -1 ? 'down' : 'stable'
+    });
+  }
 
-  setCache('economic', indicators, 60 * 60 * 1000); // 1 hour cache
+  if (dxy) {
+    const change = dxy.price - dxy.prevClose;
+    indicators.push({
+      id: 'dxy',
+      name: 'Dollar Index (DXY)',
+      value: Math.round(dxy.price * 100) / 100,
+      unit: '',
+      date: today,
+      trend: change > 0.3 ? 'up' : change < -0.3 ? 'down' : 'stable'
+    });
+  }
+
+  if (treasury10y) {
+    indicators.push({
+      id: '10y-yield',
+      name: '10-Year Treasury Yield',
+      value: Math.round(treasury10y.price * 1000) / 1000,
+      unit: '%',
+      date: today,
+      trend: treasury10y.price > treasury10y.prevClose ? 'up' : treasury10y.price < treasury10y.prevClose ? 'down' : 'stable'
+    });
+  }
+
+  if (tbill13w) {
+    indicators.push({
+      id: 'fed-rate-proxy',
+      name: 'Fed Funds Rate (13-week T-bill proxy)',
+      value: Math.round(tbill13w.price * 1000) / 1000,
+      unit: '%',
+      date: today,
+      trend: tbill13w.price > tbill13w.prevClose ? 'up' : tbill13w.price < tbill13w.prevClose ? 'down' : 'stable'
+    });
+  }
+
+  setCache('economic', indicators, 15 * 60 * 1000); // 15 min cache
   return indicators;
 }
 
@@ -399,53 +443,63 @@ export async function fetchCommodities(): Promise<CommodityPrice[]> {
   const cached = getCached<CommodityPrice[]>('commodities');
   if (cached) return cached;
 
-  // Try to fetch from metals API or fallback
+  // Fetch all commodity prices in parallel from Yahoo Finance + metals.live
+  const [goldMetals, goldYahoo, oil, gas] = await Promise.all([
+    fetchWithTimeout('https://api.metals.live/v1/spot/gold', 3000)
+      .then(r => r.json() as Promise<Array<{ price: number }>>)
+      .catch(() => null),
+    fetchYahooQuote('GC=F'),
+    fetchYahooQuote('CL=F'),
+    fetchYahooQuote('NG=F'),
+  ]);
+
   const commodities: CommodityPrice[] = [];
 
-  try {
-    // Gold price from alternative API
-    const goldRes = await fetch('https://api.metals.live/v1/spot/gold');
-    const goldData = await goldRes.json() as Array<{ price: number }>;
-    if (goldData && goldData.length > 0) {
-      commodities.push({
-        id: 'gold',
-        name: 'Gold',
-        price: goldData[0].price,
-        currency: 'USD',
-        change_24h: 0, // Would need historical for change
-        unit: 'oz'
-      });
-    }
-  } catch (err) {
-    // Fallback values
+  // Gold: prefer metals.live (spot price), fallback to Yahoo Finance (futures)
+  if (goldMetals && goldMetals.length > 0) {
     commodities.push({
       id: 'gold',
       name: 'Gold',
-      price: 2050,
+      price: goldMetals[0].price,
       currency: 'USD',
-      change_24h: 0.5,
+      change_24h: 0,
+      unit: 'oz'
+    });
+  } else if (goldYahoo) {
+    const change = goldYahoo.prevClose > 0 ? ((goldYahoo.price - goldYahoo.prevClose) / goldYahoo.prevClose) * 100 : 0;
+    commodities.push({
+      id: 'gold',
+      name: 'Gold',
+      price: Math.round(goldYahoo.price * 100) / 100,
+      currency: 'USD',
+      change_24h: Math.round(change * 100) / 100,
       unit: 'oz'
     });
   }
 
-  // Add oil estimate (would use proper API in production)
-  commodities.push({
-    id: 'wti-crude',
-    name: 'WTI Crude Oil',
-    price: 76.50,
-    currency: 'USD',
-    change_24h: -0.8,
-    unit: 'barrel'
-  });
+  if (oil) {
+    const change = oil.prevClose > 0 ? ((oil.price - oil.prevClose) / oil.prevClose) * 100 : 0;
+    commodities.push({
+      id: 'wti-crude',
+      name: 'WTI Crude Oil',
+      price: Math.round(oil.price * 100) / 100,
+      currency: 'USD',
+      change_24h: Math.round(change * 100) / 100,
+      unit: 'barrel'
+    });
+  }
 
-  commodities.push({
-    id: 'natural-gas',
-    name: 'Natural Gas',
-    price: 2.85,
-    currency: 'USD',
-    change_24h: 1.2,
-    unit: 'MMBtu'
-  });
+  if (gas) {
+    const change = gas.prevClose > 0 ? ((gas.price - gas.prevClose) / gas.prevClose) * 100 : 0;
+    commodities.push({
+      id: 'natural-gas',
+      name: 'Natural Gas',
+      price: Math.round(gas.price * 1000) / 1000,
+      currency: 'USD',
+      change_24h: Math.round(change * 100) / 100,
+      unit: 'MMBtu'
+    });
+  }
 
   setCache('commodities', commodities, 10 * 60 * 1000); // 10 min cache
   return commodities;

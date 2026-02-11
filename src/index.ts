@@ -65,7 +65,7 @@ import {
   dexLiquidityHandler,
   protocolHealthHandler
 } from './services/tradingRiskEndpoints';
-import { generateBacktestData, calculateBacktestMetrics } from './data/backtest';
+
 import { fetchNews } from './services/feeds/news';
 import { fetchMarkets } from './services/feeds/markets';
 import { fetchVolatility } from './services/feeds/volatility';
@@ -155,55 +155,64 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({
     name: 'WARGAMES',
     tagline: 'Macro intelligence for Solana agents',
-    version: '1.2.0',
-    description: 'Your agent sees prices. It doesnt see the world. WARGAMES gives agents macro context for better decisions.',
+    version: '2.0.0',
+    description: 'Macro intelligence for Solana agents. Every endpoint returns real live data - zero simulation, zero hardcoded values.',
     quick_start: {
-      step_1: 'GET /risk - Global risk score (0-100)',
-      step_2: 'Integrate: if (risk.score > 70) reduceExposure()',
-      step_3: 'GET /live/risk - Real-time risk assessment'
+      step_1: 'GET /live/risk - Real-time risk score (0-100)',
+      step_2: 'if (risk.score > 70) reduceExposure()',
+      step_3: 'GET /live/world - Full world state in one call'
     },
     endpoints: {
-      '/risk': 'Global macro risk score (static)',
-      '/live/risk': 'Live risk score with real-time data',
-      '/live/world': 'Full world state - all data in one call',
-      '/oracle/on-chain': 'WARGAMES Risk Oracle (Solana program - deploying)',
-      '/live/pyth': 'Pyth Network prices (Solana on-chain oracle)',
-      '/live/defi': 'Solana DeFi TVLs from DefiLlama',
-      '/live/solana': 'Solana network health (TPS, validators)',
-      '/live/drift': 'Drift Protocol perpetuals (volume, OI, funding)',
-      '/live/kamino': 'Kamino Finance lending (TVL, rates)',
-      '/live/meteora': 'Meteora DEX liquidity (TVL, pools)',
-      '/live/marginfi': 'MarginFi lending (TVL, utilization)',
-      '/jupiter/quote': 'Jupiter swap quotes (best DEX routing)',
-      '/jupiter/tokens': 'Jupiter supported tokens list',
-      '/live/crypto': 'Real-time crypto prices',
-      '/live/sentiment': 'Fear & Greed Index',
-      '/live/predictions': 'Polymarket prediction odds',
-      '/live/economic': 'Economic indicators',
-      '/live/commodities': 'Commodity prices',
-      '/live/weather': 'Weather at trading hubs',
-      '/events': 'Real economic calendar (FMP + Fed)',
-      '/events/next-critical': 'Next high-impact event',
-      '/narratives': 'Live narrative tracking (calculated)',
-      '/dashboard': 'Live visual dashboard',
-      '/dashboard/analytics': 'Real-time analytics (NORAD)',
-      '/dashboard/integrations': 'Integrations showcase',
-      '/stats/live': 'Live usage statistics (JSON)',
-      '/health': 'API status',
-      '/health/data': 'Data freshness monitoring',
-      '/integrations': 'List all integrations (JSON)',
-      '/integrations/:id': 'Get specific integration details',
-      '/subscribe': 'Register for webhooks (POST)',
-      '/webhooks/subscribe': 'Subscribe to event notifications (POST)',
-      '/webhooks/unsubscribe': 'Remove webhook subscription (POST)',
-      '/webhooks/subscriptions': 'List active subscriptions',
-      '/webhooks/stats': 'Webhook system statistics'
+      core: {
+        '/live/risk': 'Live risk score with components and drivers',
+        '/live/world': 'Full world state - all data in one call',
+        '/narratives': '8 geopolitical narratives with live scores',
+        '/macro/unified': 'Combined crypto + TradFi macro context',
+        '/risk': 'Quick risk score'
+      },
+      data_sources: {
+        '/live/crypto': 'CoinGecko crypto prices (20+ tokens)',
+        '/live/sentiment': 'Fear & Greed Index',
+        '/live/predictions': 'Polymarket prediction market odds',
+        '/live/economic': 'VIX, DXY, Treasury yields (Yahoo Finance)',
+        '/live/commodities': 'Gold, Oil, Natural Gas (metals.live + Yahoo Finance)',
+        '/live/weather': 'Weather at global trading hubs (Open-Meteo)'
+      },
+      feeds: {
+        '/live/news': 'Breaking news (GDELT)',
+        '/live/markets': 'FX rates and yields (FRED + Frankfurter)',
+        '/live/vol': 'Volatility indices (FRED)',
+        '/live/geo': 'Geopolitical events (GDELT)',
+        '/live/credit': 'Credit spreads (FRED)',
+        '/live/tape': 'Aggregated market tape'
+      },
+      solana: {
+        '/live/pyth': 'Pyth Network on-chain prices (50+ feeds)',
+        '/live/defi': 'Solana DeFi TVL (DefiLlama)',
+        '/live/solana': 'Network health - TPS, validators (Solana RPC)',
+        '/live/drift': 'Drift Protocol perpetuals',
+        '/live/kamino': 'Kamino Finance lending',
+        '/live/meteora': 'Meteora DEX liquidity',
+        '/live/marginfi': 'MarginFi lending'
+      },
+      oracle: {
+        '/oracle/risk/trading': 'Strategy-specific risk (perps, spot, yield)',
+        '/oracle/risk/decomposed': 'Decomposed risk components',
+        '/oracle/agent-integrity': 'Agent security + macro risk (POST)',
+        '/predictions/cross-check': 'Cross-validate risk vs Polymarket'
+      },
+      events: {
+        '/events': 'Economic calendar (FOMC, CPI, NFP, GDP)',
+        '/events/next-critical': 'Next high-impact event'
+      },
+      infra: {
+        '/health': 'API status',
+        '/health/data': 'Data source freshness',
+        '/webhooks/subscribe': 'Subscribe to risk alerts (POST)',
+        '/stats/live': 'Usage analytics'
+      }
     },
-    integration_snippet: `
-const { score } = await fetch('https://api.wargames.sol/risk').then(r => r.json());
-if (score > 70) this.reduceExposure(0.5);
-if (score < 30) this.increaseExposure(1.2);
-    `.trim(),
+    data_sources: 'All live: CoinGecko, Polymarket, Yahoo Finance, FRED, Pyth, DefiLlama, Solana RPC, GDELT, metals.live, Open-Meteo',
     built_by: 'Ziggy (Agent #311)',
     hackathon: 'Colosseum Agent Hackathon - Feb 2026'
   });
@@ -476,68 +485,6 @@ app.post('/subscribe', (req: Request, res: Response) => {
 // UTILITY ENDPOINTS
 // =============================================================================
 
-/**
- * GET /snippet/:type
- * Get copy-paste integration code
- */
-app.get('/snippet/:type', (req: Request, res: Response) => {
-  const snippets: Record<string, string> = {
-    basic: `
-// WARGAMES Basic Integration
-const WARGAMES = 'https://api.wargames.sol';
-
-async function getMacroRisk() {
-  const { score, bias } = await fetch(\`\${WARGAMES}/risk\`).then(r => r.json());
-  return { score, bias };
-}
-
-// In your decision loop:
-const { score } = await getMacroRisk();
-if (score > 70) this.reduceExposure(0.5);
-    `.trim(),
-
-    defi: `
-// WARGAMES DeFi Integration
-const WARGAMES = 'https://api.wargames.sol';
-
-async function shouldReduceDefiExposure(): Promise<boolean> {
-  const { score } = await fetch(\`\${WARGAMES}/risk/defi\`).then(r => r.json());
-  return score > 60;
-}
-
-// Before rebalancing:
-if (await shouldReduceDefiExposure()) {
-  // Reduce LP positions, increase stablecoin allocation
-  this.rebalanceDefensive();
-}
-    `.trim(),
-
-    trading: `
-// WARGAMES Trading Integration
-const WARGAMES = 'https://api.wargames.sol';
-
-async function getPositionModifier(): Promise<number> {
-  const { score } = await fetch(\`\${WARGAMES}/risk/trading\`).then(r => r.json());
-  // Scale position size inversely with risk
-  return Math.max(0.2, 1 - (score / 100));
-}
-
-// When sizing positions:
-const modifier = await getPositionModifier();
-const positionSize = baseSize * modifier;
-    `.trim()
-  };
-
-  const type = req.params.type;
-  if (!snippets[type]) {
-    return res.status(404).json({
-      error: 'Snippet type not found',
-      available: Object.keys(snippets)
-    });
-  }
-
-  res.type('text/plain').send(snippets[type]);
-});
 
 // =============================================================================
 // LIVE DATA ENDPOINTS
@@ -1308,7 +1255,7 @@ app.get('/oracle/agents', async (_req: Request, res: Response) => {
       <nav class="wg-nav" aria-label="Primary">
         <a href="/dashboard/v2">Dashboard</a>
         <a href="/dashboard/analytics">Analytics</a>
-        <a href="/dashboard/predictions">Predictions</a>
+
         <a href="/integrations/proof">Proof</a>
         <a href="/pitch">Pitch</a>
         <a href="/">API</a>
@@ -1562,27 +1509,7 @@ app.get('/protocol/health', protocolHealthHandler);
  */
 app.get('/predictions/cross-check', predictionsCrossCheckHandler);
 
-/**
- * GET /data/backtest
- * Historical risk predictions vs actual outcomes (30 days)
- * For transparency and validation of prediction accuracy
- * Built based on feedback: "How do I validate your risk score?"
- */
-app.get('/data/backtest', (_req: Request, res: Response) => {
-  const backtestData = generateBacktestData();
-  const metrics = calculateBacktestMetrics(backtestData);
 
-  res.json({
-    summary: metrics,
-    data: backtestData,
-    note: 'Validate our predictions against actual market outcomes. Share your analysis in forum.',
-    methodology: {
-      volatility: 'Predicted vs realized 24h volatility',
-      regime: 'Risk score classification vs actual market behavior',
-      liquidity: 'Liquidity stress prediction vs actual spreads'
-    }
-  });
-});
 
 // =============================================================================
 // FEED STACK - Trading Floor Control Centre
@@ -2175,7 +2102,7 @@ app.get('/wallet/connections', (_req: Request, res: Response) => {
  * {
  *   "url": "https://your-agent.com/webhook",
  *   "agentName": "your-agent-name",
- *   "events": ["risk_spike", "risk_drop", "high_impact_event", "narrative_shift", "prediction_risk_spike", "prediction_liquidation_cascade"],
+ *   "events": ["risk_spike", "risk_drop", "high_impact_event", "narrative_shift"],
  *   "thresholds": {
  *     "riskSpike": 10,  // Optional: trigger if risk increases by 10+ points
  *     "riskDrop": 10,   // Optional: trigger if risk decreases by 10+ points
@@ -2212,12 +2139,7 @@ app.post('/webhooks/subscribe', (req: Request, res: Response) => {
       'risk_spike',
       'risk_drop',
       'high_impact_event',
-      'narrative_shift',
-      'prediction_risk_spike',
-      'prediction_liquidation_cascade',
-      'prediction_speculation_peak',
-      'prediction_capital_outflow',
-      'prediction_execution_window'
+      'narrative_shift'
     ];
     const invalidEvents = events.filter((e: string) => !validEvents.includes(e));
 
@@ -2345,31 +2267,6 @@ app.get('/webhooks/stats', (_req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /webhooks/check-predictions
- * Manually trigger predictive alerts check
- *
- * This endpoint checks all predictions and sends webhooks to subscribers
- * for critical events. Normally runs automatically in background, but can
- * be triggered manually for testing or immediate checks.
- */
-app.post('/webhooks/check-predictions', async (_req: Request, res: Response) => {
-  try {
-    const { checkPredictiveAlerts } = await import('./services/webhookManager');
-    await checkPredictiveAlerts();
-
-    res.json({
-      success: true,
-      message: 'Predictive alerts check completed',
-      note: 'Webhooks sent to subscribers for critical predictions'
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Failed to check predictive alerts',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
 
 // =============================================================================
 // PREMIUM ENDPOINTS
@@ -2730,7 +2627,7 @@ app.get('/dashboard/analytics', (_req: Request, res: Response) => {
       </div>
       <nav class="wg-nav" aria-label="Primary">
         <a href="/dashboard/v2">Dashboard</a>
-        <a href="/dashboard/predictions">Predictions</a>
+
         <a href="/integrations/proof">Proof</a>
         <a href="/oracle/agents">Oracle</a>
         <a href="/pitch">Pitch</a>
@@ -3072,7 +2969,7 @@ app.get('/dashboard/integrations', (_req: Request, res: Response) => {
       <nav class="wg-nav" aria-label="Primary">
         <a href="/dashboard/v2">Dashboard</a>
         <a href="/dashboard/analytics">Analytics</a>
-        <a href="/dashboard/predictions">Predictions</a>
+
         <a href="/integrations/proof">Proof</a>
         <a href="/oracle/agents">Oracle</a>
         <a href="/pitch">Pitch</a>
@@ -3454,7 +3351,7 @@ app.get('/integrations/proof', async (_req: Request, res: Response) => {
       <nav class="wg-nav" aria-label="Primary">
         <a href="/dashboard/v2">Dashboard</a>
         <a href="/dashboard/analytics">Analytics</a>
-        <a href="/dashboard/predictions">Predictions</a>
+
         <a href="/dashboard/integrations">Integrations</a>
         <a href="/oracle/agents">Oracle</a>
         <a href="/pitch">Pitch</a>
@@ -5077,7 +4974,7 @@ app.get('/dashboard/v2', async (_req: Request, res: Response) => {
       </div>
       <nav class="wg-nav" aria-label="Primary">
         <a href="/dashboard/analytics">Analytics</a>
-        <a href="/dashboard/predictions">Predictions</a>
+
         <a href="/dashboard/integrations">Integrations</a>
         <a href="/integrations/proof">Proof</a>
         <a href="/oracle/agents">Oracle</a>
@@ -5557,717 +5454,6 @@ app.listen(PORT, '0.0.0.0', () => {
   `);
 });
 
-/**
- * GET /dashboard/predictions
- * Real-time predictions dashboard with countdown timers
- */
-app.get('/dashboard/predictions', async (_req: Request, res: Response) => {
-  res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WARGAMES // PREDICTION INTELLIGENCE TERMINAL</title>
-  <link rel="stylesheet" href="/assets/brand.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      background: #070d14;
-      color: #f1f8ff;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      padding: 0;
-      min-height: 100vh;
-    }
-
-    /* Grid overlay effect */
-    .grid-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background:
-        repeating-linear-gradient(0deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px),
-        repeating-linear-gradient(90deg, rgba(54, 212, 255, 0.08) 0px, transparent 1px, transparent 60px);
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    .content { position: relative; z-index: 2; }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-
-    .stats-bar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 15px;
-      margin-bottom: 25px;
-    }
-
-    .stat-card {
-      background: #0e1822;
-      border: 1px solid #234055;
-      padding: 16px 20px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .stat-card.armed {
-      border-top: 2px solid #02ff81;
-    }
-
-    .stat-label {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #7a9ab0;
-      margin-bottom: 8px;
-    }
-
-    .stat-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      font-size: 24px;
-    }
-
-    .stat-value.blue { color: #36d4ff; }
-    .stat-value.green { color: #02ff81; }
-    .stat-value.orange { color: #f5a623; }
-
-    .predictions-grid {
-      display: grid;
-      gap: 20px;
-    }
-
-    .prediction-card {
-      background: #0e1822;
-      border: 1px solid #234055;
-      padding: 20px 25px;
-      position: relative;
-    }
-
-    .prediction-card.armed { border-top: 2px solid #02ff81; }
-    .prediction-card.critical { border-top: 2px solid #ff6b6b; }
-    .prediction-card.high { border-top: 2px solid #f5a623; }
-    .prediction-card.medium { border-top: 2px solid #36d4ff; }
-    .prediction-card.low { border-top: 2px solid #02ff81; }
-
-    .prediction-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 16px;
-    }
-
-    .prediction-type {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #36d4ff;
-      margin-bottom: 8px;
-    }
-
-    .prediction-title {
-      font-family: 'Inter', sans-serif;
-      font-weight: 600;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-      margin-bottom: 4px;
-    }
-
-    .status-pill {
-      display: inline-block;
-      padding: 4px 10px;
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      border: 1px solid;
-    }
-
-    .status-pill.critical { background: rgba(255, 107, 107, 0.1); color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3); }
-    .status-pill.high { background: rgba(245, 166, 35, 0.1); color: #f5a623; border-color: rgba(245, 166, 35, 0.3); }
-    .status-pill.medium { background: rgba(54, 212, 255, 0.1); color: #36d4ff; border-color: rgba(54, 212, 255, 0.3); }
-    .status-pill.low { background: rgba(2, 255, 129, 0.1); color: #02ff81; border-color: rgba(2, 255, 129, 0.3); }
-
-    .countdown {
-      font-size: 32px;
-      font-weight: 600;
-      color: #36d4ff;
-      margin: 16px 0;
-      font-variant-numeric: tabular-nums;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .countdown.urgent { color: #ff6b6b; }
-
-    .confidence-bar {
-      margin: 16px 0;
-    }
-
-    .confidence-label {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #7a9ab0;
-      margin-bottom: 6px;
-    }
-
-    .confidence-track {
-      height: 8px;
-      background: #101c28;
-      border: 1px solid #234055;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .confidence-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #02ff81, #36d4ff);
-    }
-
-    .prediction-details {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 12px;
-      margin: 16px 0;
-      padding: 16px;
-      background: #101c28;
-      border: 1px solid #234055;
-    }
-
-    .detail-item {
-      font-size: 11px;
-    }
-
-    .detail-label {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #7a9ab0;
-      margin-bottom: 4px;
-    }
-
-    .detail-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      font-size: 13px;
-      color: #f1f8ff;
-    }
-
-    .reasoning {
-      font-size: 12px;
-      line-height: 1.6;
-      color: #b8d0e0;
-      margin: 12px 0;
-      padding: 12px;
-      background: #101c28;
-      border-left: 2px solid #36d4ff;
-    }
-
-    .action {
-      font-size: 13px;
-      font-weight: 600;
-      color: #02ff81;
-      margin-top: 12px;
-      padding: 12px;
-      background: rgba(2, 255, 129, 0.05);
-      border: 1px solid rgba(2, 255, 129, 0.2);
-    }
-
-    .action::before {
-      content: "→ ";
-      margin-right: 8px;
-    }
-
-    .loading {
-      text-align: center;
-      padding: 60px;
-      color: #7a9ab0;
-      font-size: 14px;
-    }
-
-    .footer {
-      margin-top: 30px;
-      padding: 20px;
-      text-align: center;
-      font-size: 10px;
-      color: #7a9ab0;
-      border-top: 1px solid #234055;
-    }
-
-    @media (max-width: 768px) {
-      .predictions-grid { gap: 15px; }
-      .prediction-card { padding: 15px 18px; }
-    }
-  </style>
-</head>
-<body>
-  <div class="grid-overlay"></div>
-  <div class="wg-topbar">
-    <div class="wg-topbar-inner">
-      <div class="wg-topbar-left">
-        <div class="wg-badge"><span class="wg-dot"></span> LIVE • PREDICTIONS</div>
-        <div class="wg-title">WARGAMES // PREDICTIONS</div>
-        <div class="wg-subtitle">PREDICTION INTELLIGENCE TERMINAL</div>
-      </div>
-      <nav class="wg-nav" aria-label="Primary">
-        <a href="/dashboard/v2">Dashboard</a>
-        <a href="/dashboard/analytics">Analytics</a>
-        <a href="/dashboard/integrations">Integrations</a>
-        <a href="/integrations/proof">Proof</a>
-        <a href="/oracle/agents">Oracle</a>
-        <a href="/pitch">Pitch</a>
-        <a href="/">API</a>
-      </nav>
-    </div>
-  </div>
-  <div class="container">
-    <div class="header">
-      <div class="title">PREDICTIVE INTELLIGENCE</div>
-      <div class="subtitle">Real-time event forecasting • Lead time optimization</div>
-    </div>
-
-    <div class="stats-bar" id="stats">
-      <div class="stat-card">
-        <div class="stat-label">Active Predictions</div>
-        <div class="stat-value blue" id="total-predictions">–</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Critical Alerts</div>
-        <div class="stat-value orange" id="actionable-count">–</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Lead Time</div>
-        <div class="stat-value green" id="lead-time">–</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Last Updated</div>
-        <div class="stat-value" id="last-updated" style="font-size: 14px; color: var(--text-dim);">–</div>
-      </div>
-    </div>
-
-    <div class="predictions-grid" id="predictions">
-      <div class="loading">Loading predictions...</div>
-    </div>
-
-    <div class="footer">
-      WARGAMES PREDICTIVE INTELLIGENCE TERMINAL • Auto-refresh: 30s • API: /predict
-    </div>
-  </div>
-
-  <script>
-    const API = 'https://wargames-api.vercel.app';
-
-    async function loadPredictions() {
-      try {
-        const response = await fetch(API + '/predict');
-        const data = await response.json();
-
-        // Update stats
-        document.getElementById('total-predictions').textContent = data.predictions.length;
-        document.getElementById('actionable-count').textContent = data.actionable_count;
-        document.getElementById('lead-time').textContent = data.lead_time_hours.toFixed(1) + 'h';
-        document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
-
-        // Render predictions
-        const container = document.getElementById('predictions');
-
-        if (data.predictions.length === 0) {
-          container.innerHTML = '<div class="loading">No critical predictions at this time</div>';
-          return;
-        }
-
-        container.innerHTML = data.predictions.map(p => \`
-          <div class="prediction-card \${p.impact}">
-            <div class="prediction-header">
-              <div>
-                <div class="prediction-type">\${p.type.replace(/_/g, ' ')}</div>
-                <div class="prediction-title">\${getTitle(p)}</div>
-              </div>
-              <div class="impact-badge \${p.impact}">\${p.impact}</div>
-            </div>
-
-            <div class="countdown \${p.time_to_event < 7200000 ? 'urgent' : ''}" data-time="\${p.time_to_event}">
-              \${p.time_to_event_readable}
-            </div>
-
-            <div class="confidence-bar">
-              <div class="confidence-label">Confidence: \${(p.confidence * 100).toFixed(0)}%</div>
-              <div class="confidence-track">
-                <div class="confidence-fill" style="width: \${p.confidence * 100}%"></div>
-              </div>
-            </div>
-
-            <div class="prediction-details">
-              <div class="detail-item">
-                <div class="detail-label">Current Value</div>
-                <div class="detail-value">\${formatValue(p.current_value, p.type)}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Predicted Value</div>
-                <div class="detail-value">\${formatValue(p.predicted_value, p.type)}</div>
-              </div>
-            </div>
-
-            <div class="reasoning">\${p.reasoning}</div>
-            <div class="action">\${p.recommended_action}</div>
-          </div>
-        \`).join('');
-
-        // Start countdown timers
-        startCountdowns();
-
-      } catch (error) {
-        console.error('Failed to load predictions:', error);
-      }
-    }
-
-    function getTitle(p) {
-      const titles = {
-        'risk_spike': 'Risk Spike Incoming',
-        'liquidation_cascade': 'Liquidation Cascade Risk',
-        'speculation_peak': 'Speculation Cycle Peak',
-        'execution_window': 'Optimal Execution Window'
-      };
-      return titles[p.type] || p.type;
-    }
-
-    function formatValue(value, type) {
-      if (type === 'liquidation_cascade') return '$' + (value / 1000000).toFixed(1) + 'M';
-      return value.toFixed(0);
-    }
-
-    function startCountdowns() {
-      setInterval(() => {
-        document.querySelectorAll('.countdown[data-time]').forEach(el => {
-          const timeToEvent = parseInt(el.dataset.time);
-          const now = Date.now();
-          const targetTime = now + timeToEvent - ((Date.now() - loadTime));
-          const remaining = targetTime - Date.now();
-
-          if (remaining <= 0) {
-            el.textContent = 'EVENT IMMINENT';
-            el.classList.add('urgent');
-          } else {
-            el.textContent = formatDuration(remaining);
-          }
-        });
-      }, 1000);
-    }
-
-    function formatDuration(ms) {
-      const hours = Math.floor(ms / (1000 * 60 * 60));
-      const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((ms % (1000 * 60)) / 1000);
-
-      if (hours > 24) {
-        const days = Math.floor(hours / 24);
-        const remainingHours = hours % 24;
-        return \`\${days}d \${remainingHours}h\`;
-      } else if (hours > 0) {
-        return \`\${hours}h \${minutes}m\`;
-      } else if (minutes > 0) {
-        return \`\${minutes}m \${seconds}s\`;
-      } else {
-        return \`\${seconds}s\`;
-      }
-    }
-
-    let loadTime = Date.now();
-
-    // Initial load
-    loadPredictions();
-
-    // Auto-refresh every 30 seconds
-    setInterval(() => {
-      loadTime = Date.now();
-      loadPredictions();
-    }, 30000);
-  </script>
-</body>
-</html>
-  `);
-});
-
-export default app;
-
-// =============================================================================
-// PREDICTIVE INTELLIGENCE (THE MAGIC SAUCE)
-// =============================================================================
-
-app.get('/predict', async (_req: Request, res: Response) => {
-  try {
-    const { getPredictiveAnalysis } = await import('./services/predictiveEngine');
-    const analysis = await getPredictiveAnalysis();
-    res.json(analysis);
-  } catch (error) {
-    console.error('Prediction error:', error);
-    res.status(500).json({ error: 'Failed to generate predictions' });
-  }
-});
-
-app.get('/predict/risk-spikes', async (_req: Request, res: Response) => {
-  try {
-    const { predictRiskSpikes } = await import('./services/predictiveEngine');
-    const predictions = await predictRiskSpikes();
-    res.json({ predictions, count: predictions.length });
-  } catch (error) {
-    console.error('Risk spike prediction error:', error);
-    res.status(500).json({ error: 'Failed to predict risk spikes' });
-  }
-});
-
-app.get('/predict/liquidations', async (_req: Request, res: Response) => {
-  try {
-    const { predictLiquidationCascades } = await import('./services/predictiveEngine');
-    const prediction = await predictLiquidationCascades();
-    res.json(prediction || { message: 'No cascade risk detected' });
-  } catch (error) {
-    console.error('Liquidation prediction error:', error);
-    res.status(500).json({ error: 'Failed to predict liquidations' });
-  }
-});
-
-app.get('/predict/speculation-peak', async (_req: Request, res: Response) => {
-  try {
-    const { predictSpeculationPeak } = await import('./services/predictiveEngine');
-    const prediction = await predictSpeculationPeak();
-    res.json(prediction || { message: 'No peak detected' });
-  } catch (error) {
-    console.error('Speculation prediction error:', error);
-    res.status(500).json({ error: 'Failed to predict speculation peak' });
-  }
-});
-
-app.get('/predict/execution-windows', async (_req: Request, res: Response) => {
-  try {
-    const { predictExecutionWindows } = await import('./services/predictiveEngine');
-    const predictions = await predictExecutionWindows();
-    res.json({ predictions, count: predictions.length });
-  } catch (error) {
-    console.error('Execution window prediction error:', error);
-    res.status(500).json({ error: 'Failed to predict execution windows' });
-  }
-});
-
-// =============================================================================
-// BRIDGE VOLUME & CAPITAL FLOWS (LEAD INDICATOR)
-// =============================================================================
-
-/**
- * GET /bridge/capital-flows
- * Complete capital flow analysis (inflows/outflows across major bridges)
- */
-app.get('/bridge/capital-flows', async (_req: Request, res: Response) => {
-  try {
-    const { getCapitalFlowAnalysis } = await import('./services/bridgeIntegration');
-    const analysis = await getCapitalFlowAnalysis();
-    res.json(analysis);
-  } catch (error) {
-    console.error('Capital flow analysis error:', error);
-    res.status(500).json({ error: 'Failed to analyze capital flows' });
-  }
-});
-
-/**
- * GET /bridge/signal
- * Simple signal strength (0-100) + direction
- */
-app.get('/bridge/signal', async (_req: Request, res: Response) => {
-  try {
-    const { getCapitalFlowSignal } = await import('./services/bridgeIntegration');
-    const signal = await getCapitalFlowSignal();
-    res.json(signal);
-  } catch (error) {
-    console.error('Capital flow signal error:', error);
-    res.status(500).json({ error: 'Failed to get capital flow signal' });
-  }
-});
-
-/**
- * GET /bridge/predict-trend
- * Predict capital flow trend over next 24-48h
- */
-app.get('/bridge/predict-trend', async (_req: Request, res: Response) => {
-  try {
-    const { predictCapitalFlowTrend } = await import('./services/bridgeIntegration');
-    const trend = await predictCapitalFlowTrend();
-    res.json(trend);
-  } catch (error) {
-    console.error('Capital flow trend prediction error:', error);
-    res.status(500).json({ error: 'Failed to predict capital flow trend' });
-  }
-});
-
-// =============================================================================
-// GOVERNANCE ACTIVITY TRACKING (ECOSYSTEM ENGAGEMENT)
-// =============================================================================
-
-/**
- * GET /governance/metrics
- * Complete governance metrics (DAO activity, participation rates)
- */
-app.get('/governance/metrics', async (_req: Request, res: Response) => {
-  try {
-    const { getGovernanceMetrics } = await import('./services/governanceIntegration');
-    const metrics = await getGovernanceMetrics();
-    res.json(metrics);
-  } catch (error) {
-    console.error('Governance metrics error:', error);
-    res.status(500).json({ error: 'Failed to get governance metrics' });
-  }
-});
-
-/**
- * GET /governance/trend
- * Predict governance activity trend
- */
-app.get('/governance/trend', async (_req: Request, res: Response) => {
-  try {
-    const { getGovernanceTrend } = await import('./services/governanceIntegration');
-    const trend = await getGovernanceTrend();
-    res.json(trend);
-  } catch (error) {
-    console.error('Governance trend error:', error);
-    res.status(500).json({ error: 'Failed to predict governance trend' });
-  }
-});
-
-/**
- * GET /governance/health
- * Simple governance health signal (0-100)
- */
-app.get('/governance/health', async (_req: Request, res: Response) => {
-  try {
-    const { getGovernanceHealthSignal } = await import('./services/governanceIntegration');
-    const health = await getGovernanceHealthSignal();
-    res.json(health);
-  } catch (error) {
-    console.error('Governance health signal error:', error);
-    res.status(500).json({ error: 'Failed to get governance health signal' });
-  }
-});
-
-// =============================================================================
-// PREDICTION ACCURACY TRACKING
-// =============================================================================
-
-/**
- * GET /predictions/accuracy
- * Prediction accuracy statistics (prove predictions work)
- */
-app.get('/predictions/accuracy', (_req: Request, res: Response) => {
-  try {
-    const { getAccuracyStats } = require('./services/predictionTracking');
-    const stats = getAccuracyStats();
-    res.json(stats);
-  } catch (error) {
-    console.error('Prediction accuracy stats error:', error);
-    res.status(500).json({ error: 'Failed to get accuracy stats' });
-  }
-});
-
-/**
- * GET /predictions/history
- * Recent prediction history (last 20)
- */
-app.get('/predictions/history', (req: Request, res: Response) => {
-  try {
-    const { getRecentPredictions } = require('./services/predictionTracking');
-    const limit = parseInt(req.query.limit as string) || 20;
-    const history = getRecentPredictions(Math.min(limit, 50));
-    res.json({ history, count: history.length });
-  } catch (error) {
-    console.error('Prediction history error:', error);
-    res.status(500).json({ error: 'Failed to get prediction history' });
-  }
-});
-
-/**
- * GET /predictions/successful
- * Successful predictions only (for credibility/marketing)
- */
-app.get('/predictions/successful', (req: Request, res: Response) => {
-  try {
-    const { getSuccessfulPredictions } = require('./services/predictionTracking');
-    const limit = parseInt(req.query.limit as string) || 10;
-    const successful = getSuccessfulPredictions(Math.min(limit, 20));
-    res.json({ predictions: successful, count: successful.length });
-  } catch (error) {
-    console.error('Successful predictions error:', error);
-    res.status(500).json({ error: 'Failed to get successful predictions' });
-  }
-});
-
-
-// =============================================================================
-// MARKET REGIME DETECTION
-// =============================================================================
-
-/**
- * GET /market/regime
- * Detect current market regime (bull/bear/crab/volatile)
- */
-app.get('/market/regime', async (_req: Request, res: Response) => {
-  try {
-    const { detectMarketRegime } = await import('./services/marketRegime');
-    const regime = await detectMarketRegime();
-    res.json(regime);
-  } catch (error) {
-    console.error('Market regime detection error:', error);
-    res.status(500).json({ error: 'Failed to detect market regime' });
-  }
-});
-
-/**
- * GET /market/regime/transition
- * Predict next likely market regime transition
- */
-app.get('/market/regime/transition', async (_req: Request, res: Response) => {
-  try {
-    const { getRegimeTransitionProbability } = await import('./services/marketRegime');
-    const transition = await getRegimeTransitionProbability();
-    res.json(transition);
-  } catch (error) {
-    console.error('Regime transition prediction error:', error);
-    res.status(500).json({ error: 'Failed to predict regime transition' });
-  }
-});
-
-/**
- * GET /market/regime/history
- * Get regime history (last N days)
- */
-app.get('/market/regime/history', async (req: Request, res: Response) => {
-  try {
-    const { getRegimeHistory } = await import('./services/marketRegime');
-    const days = parseInt(req.query.days as string) || 7;
-    const history = getRegimeHistory(Math.min(days, 30));
-    res.json({ history, days: history.length });
-  } catch (error) {
-    console.error('Regime history error:', error);
-    res.status(500).json({ error: 'Failed to get regime history' });
-  }
-});
 
 // =============================================================================
 // MACRO ORACLE INTEGRATION - Unified Signal Stack
@@ -6332,7 +5518,7 @@ app.get('/macro/unified', async (_req: Request, res: Response) => {
       recommendation: generateUnifiedRecommendation(wargamesRisk, macroOracleData, fearGreedValue),
 
       _meta: {
-        wargames_api: 'https://wargames-api.vercel.app',
+        wargames_api: 'https://wargames-api.fly.dev',
         macro_oracle_api: 'https://macro-oracle-production.up.railway.app',
         integration_status: macroOracleData ? 'full' : 'crypto_only',
         data_sources: macroOracleData ?
@@ -6390,598 +5576,4 @@ function generateUnifiedRecommendation(wargamesRisk: any, macroOracleData: any, 
   return rec;
 }
 
-// =============================================================================
-// PROTOCOL HEALTH SCORES
-// =============================================================================
-
-/**
- * GET /protocols/health
- * Get health scores for all major Solana protocols
- */
-app.get('/protocols/health', async (_req: Request, res: Response) => {
-  try {
-    const { getAllProtocolHealth } = await import('./services/protocolHealth');
-    const health = await getAllProtocolHealth();
-    res.json(health);
-  } catch (error) {
-    console.error('Protocol health error:', error);
-    res.status(500).json({ error: 'Failed to get protocol health' });
-  }
-});
-
-/**
- * GET /protocols/health/:protocol
- * Get health score for specific protocol
- */
-app.get('/protocols/health/:protocol', async (req: Request, res: Response) => {
-  try {
-    const { getProtocolHealth } = await import('./services/protocolHealth');
-    const { protocol } = req.params;
-    const health = await getProtocolHealth(protocol);
-    res.json(health);
-  } catch (error) {
-    console.error('Protocol health error:', error);
-    res.status(500).json({ error: 'Failed to get protocol health' });
-  }
-});
-
-/**
- * GET /protocols/compare
- * Compare health scores of multiple protocols
- * Query: ?protocols=Drift,Kamino,MarginFi
- */
-app.get('/protocols/compare', async (req: Request, res: Response) => {
-  try {
-    const { compareProtocols } = await import('./services/protocolHealth');
-    const protocolsParam = req.query.protocols as string;
-
-    if (!protocolsParam) {
-      return res.status(400).json({
-        error: 'Missing protocols parameter',
-        example: '/protocols/compare?protocols=Drift,Kamino,MarginFi'
-      });
-    }
-
-    const protocols = protocolsParam.split(',').map(p => p.trim());
-    const comparison = await compareProtocols(protocols);
-    res.json(comparison);
-  } catch (error) {
-    console.error('Protocol comparison error:', error);
-    res.status(500).json({ error: 'Failed to compare protocols' });
-  }
-});
-
-/**
- * GET /protocols/risk/:level
- * Get protocols by risk level (critical/high/medium/low)
- */
-app.get('/protocols/risk/:level', async (req: Request, res: Response) => {
-  try {
-    const { getProtocolsByRisk } = await import('./services/protocolHealth');
-    const { level } = req.params;
-
-    if (!['critical', 'high', 'medium', 'low'].includes(level)) {
-      return res.status(400).json({
-        error: 'Invalid risk level',
-        valid_levels: ['critical', 'high', 'medium', 'low']
-      });
-    }
-
-    const protocols = await getProtocolsByRisk(level as any);
-    res.json({ risk_level: level, protocols, count: protocols.length });
-  } catch (error) {
-    console.error('Protocols by risk error:', error);
-    res.status(500).json({ error: 'Failed to get protocols by risk' });
-  }
-});
-
-// =============================================================================
-// SMART MONEY TRACKING (WHALE WALLETS)
-// =============================================================================
-
-/**
- * GET /smart-money/signals
- * Aggregate smart money signals from top wallets
- */
-app.get('/smart-money/signals', async (_req: Request, res: Response) => {
-  try {
-    const { getSmartMoneySignals } = await import('./services/smartMoney');
-    const signals = await getSmartMoneySignals();
-    res.json(signals);
-  } catch (error) {
-    console.error('Smart money signals error:', error);
-    res.status(500).json({ error: 'Failed to get smart money signals' });
-  }
-});
-
-/**
- * GET /smart-money/alerts
- * Get smart money alerts (whale accumulation/distribution)
- */
-app.get('/smart-money/alerts', async (_req: Request, res: Response) => {
-  try {
-    const { getSmartMoneyAlerts } = await import('./services/smartMoney');
-    const alerts = await getSmartMoneyAlerts();
-    res.json({ alerts, count: alerts.length });
-  } catch (error) {
-    console.error('Smart money alerts error:', error);
-    res.status(500).json({ error: 'Failed to get smart money alerts' });
-  }
-});
-
-/**
- * GET /smart-money/wallets
- * Get top wallet activity
- */
-app.get('/smart-money/wallets', (req: Request, res: Response) => {
-  try {
-    const { getTopWalletActivity } = require('./services/smartMoney');
-    const limit = parseInt(req.query.limit as string) || 10;
-    const wallets = getTopWalletActivity(Math.min(limit, 50));
-    res.json({ wallets, count: wallets.length });
-  } catch (error) {
-    console.error('Smart money wallets error:', error);
-    res.status(500).json({ error: 'Failed to get wallet activity' });
-  }
-});
-
-// =============================================================================
-// NETWORK HEALTH & CONGESTION PREDICTION
-// =============================================================================
-
-/**
- * GET /network/health
- * Current network health + congestion prediction
- */
-app.get('/network/health', async (_req: Request, res: Response) => {
-  try {
-    const { getNetworkHealth } = await import('./services/networkHealth');
-    const health = await getNetworkHealth();
-    res.json(health);
-  } catch (error) {
-    console.error('Network health error:', error);
-    res.status(500).json({ error: 'Failed to get network health' });
-  }
-});
-
-/**
- * GET /network/congestion-alerts
- * Get congestion alerts
- */
-app.get('/network/congestion-alerts', async (_req: Request, res: Response) => {
-  try {
-    const { getCongestionAlerts } = await import('./services/networkHealth');
-    const alerts = await getCongestionAlerts();
-    res.json({ alerts, count: alerts.length });
-  } catch (error) {
-    console.error('Congestion alerts error:', error);
-    res.status(500).json({ error: 'Failed to get congestion alerts' });
-  }
-});
-
-/**
- * GET /network/optimal-timing
- * Get optimal transaction timing (when to send for lowest fees)
- */
-app.get('/network/optimal-timing', async (_req: Request, res: Response) => {
-  try {
-    const { getOptimalTxTiming } = await import('./services/networkHealth');
-    const timing = await getOptimalTxTiming();
-    res.json(timing);
-  } catch (error) {
-    console.error('Optimal timing error:', error);
-    res.status(500).json({ error: 'Failed to get optimal timing' });
-  }
-});
-
-// =============================================================================
-// DEFI OPPORTUNITY SCANNER
-// =============================================================================
-
-/**
- * GET /defi/opportunities
- * Scan all protocols for best yields and opportunities
- */
-app.get('/defi/opportunities', async (_req: Request, res: Response) => {
-  try {
-    const { scanDeFiOpportunities } = await import('./services/defiOpportunities');
-    const scan = await scanDeFiOpportunities();
-    res.json(scan);
-  } catch (error) {
-    console.error('DeFi opportunities scan error:', error);
-    res.status(500).json({ error: 'Failed to scan DeFi opportunities' });
-  }
-});
-
-/**
- * GET /defi/opportunities/:asset
- * Get best opportunities for specific asset
- */
-app.get('/defi/opportunities/:asset', async (req: Request, res: Response) => {
-  try {
-    const { getBestOpportunitiesForAsset } = await import('./services/defiOpportunities');
-    const { asset } = req.params;
-    const opportunities = await getBestOpportunitiesForAsset(asset);
-    res.json({ asset, opportunities, count: opportunities.length });
-  } catch (error) {
-    console.error('DeFi opportunities error:', error);
-    res.status(500).json({ error: 'Failed to get opportunities' });
-  }
-});
-
-/**
- * GET /defi/compare/:asset
- * Compare opportunities for asset across protocols
- */
-app.get('/defi/compare/:asset', async (req: Request, res: Response) => {
-  try {
-    const { compareProtocolOpportunities } = await import('./services/defiOpportunities');
-    const { asset } = req.params;
-    const comparison = await compareProtocolOpportunities(asset);
-    res.json(comparison);
-  } catch (error) {
-    console.error('DeFi comparison error:', error);
-    res.status(500).json({ error: 'Failed to compare opportunities' });
-  }
-});
-
-// =============================================================================
-// ARBITRAGE DETECTOR
-// =============================================================================
-
-/**
- * GET /arbitrage/scan
- * Scan for arbitrage opportunities across DEXs
- */
-app.get('/arbitrage/scan', async (_req: Request, res: Response) => {
-  try {
-    const { scanArbitrageOpportunities } = await import('./services/arbitrageDetector');
-    const scan = await scanArbitrageOpportunities();
-    res.json(scan);
-  } catch (error) {
-    console.error('Arbitrage scan error:', error);
-    res.status(500).json({ error: 'Failed to scan arbitrage opportunities' });
-  }
-});
-
-/**
- * GET /arbitrage/token/:token
- * Get arbitrage opportunities for specific token
- */
-app.get('/arbitrage/token/:token', async (req: Request, res: Response) => {
-  try {
-    const { getArbitrageForToken } = await import('./services/arbitrageDetector');
-    const { token } = req.params;
-    const opportunities = await getArbitrageForToken(token);
-    res.json({ token, opportunities, count: opportunities.length });
-  } catch (error) {
-    console.error('Arbitrage token error:', error);
-    res.status(500).json({ error: 'Failed to get arbitrage opportunities' });
-  }
-});
-
-/**
- * GET /arbitrage/alerts
- * Get real-time arbitrage alerts
- */
-app.get('/arbitrage/alerts', async (_req: Request, res: Response) => {
-  try {
-    const { getArbitrageAlerts } = await import('./services/arbitrageDetector');
-    const alerts = await getArbitrageAlerts();
-    res.json({ alerts, count: alerts.length });
-  } catch (error) {
-    console.error('Arbitrage alerts error:', error);
-    res.status(500).json({ error: 'Failed to get arbitrage alerts' });
-  }
-});
-
-/**
- * GET /arbitrage/stats
- * Get historical arbitrage statistics
- */
-app.get('/arbitrage/stats', (_req: Request, res: Response) => {
-  try {
-    const { getArbitrageStats } = require('./services/arbitrageDetector');
-    const stats = getArbitrageStats();
-    res.json(stats);
-  } catch (error) {
-    console.error('Arbitrage stats error:', error);
-    res.status(500).json({ error: 'Failed to get arbitrage stats' });
-  }
-});
-
-// =============================================================================
-// VERIFIABLE RISK TIMELINE (PREDICT → PRESCRIBE → PROVE)
-// =============================================================================
-
-/**
- * GET /forecast/48h
- * 48-hour event impact forecast with risk windows
- */
-app.get('/forecast/48h', async (_req: Request, res: Response) => {
-  try {
-    const { generate48hForecast } = await import('./services/riskTimeline');
-    const forecast = await generate48hForecast();
-    res.json(forecast);
-  } catch (error) {
-    console.error('48h forecast error:', error);
-    res.status(500).json({ error: 'Failed to generate 48h forecast' });
-  }
-});
-
-/**
- * GET /forecast/48h/posture
- * Strategy-specific posture recommendations
- * Query: ?strategy=trader|lp|yield|market-maker
- */
-app.get('/forecast/48h/posture', async (req: Request, res: Response) => {
-  try {
-    const { generate48hPosture } = await import('./services/riskTimeline');
-    const strategy = req.query.strategy as string;
-
-    if (!['trader', 'lp', 'yield', 'market-maker'].includes(strategy)) {
-      return res.status(400).json({
-        error: 'Invalid strategy',
-        valid_strategies: ['trader', 'lp', 'yield', 'market-maker']
-      });
-    }
-
-    const posture = await generate48hPosture(strategy as any);
-    res.json(posture);
-  } catch (error) {
-    console.error('Posture generation error:', error);
-    res.status(500).json({ error: 'Failed to generate posture' });
-  }
-});
-
-/**
- * POST /receipts
- * Create verifiable on-chain receipt for a decision
- */
-app.post('/receipts', async (req: Request, res: Response) => {
-  try {
-    const { createReceipt } = await import('./services/riskTimeline');
-    const { agentId, forecastWindowId, strategy, recommendationPayload, inputSnapshot } = req.body;
-
-    if (!agentId || !forecastWindowId || !strategy || !recommendationPayload || !inputSnapshot) {
-      return res.status(400).json({
-        error: 'Missing required fields',
-        required: {
-          agentId: 'string',
-          forecastWindowId: 'string',
-          strategy: 'string',
-          recommendationPayload: 'object',
-          inputSnapshot: 'object with riskScore, components, eventIds'
-        }
-      });
-    }
-
-    const receipt = await createReceipt({
-      agentId,
-      forecastWindowId,
-      strategy,
-      recommendationPayload,
-      inputSnapshot
-    });
-
-    res.json({
-      success: true,
-      receipt,
-      message: 'Receipt created and will be anchored on-chain'
-    });
-  } catch (error) {
-    console.error('Receipt creation error:', error);
-    res.status(500).json({ error: 'Failed to create receipt' });
-  }
-});
-
-/**
- * GET /receipts/:id
- * Get receipt by ID
- */
-app.get('/receipts/:id', (_req: Request, res: Response) => {
-  try {
-    const { getReceipt } = require('./services/riskTimeline');
-    const { id } = _req.params;
-
-    const receipt = getReceipt(id);
-
-    if (!receipt) {
-      return res.status(404).json({ error: 'Receipt not found' });
-    }
-
-    res.json(receipt);
-  } catch (error) {
-    console.error('Receipt retrieval error:', error);
-    res.status(500).json({ error: 'Failed to get receipt' });
-  }
-});
-
-/**
- * GET /receipts/:id/verify
- * Verify receipt integrity and on-chain anchor
- */
-app.get('/receipts/:id/verify', async (_req: Request, res: Response) => {
-  try {
-    const { verifyReceipt } = await import('./services/riskTimeline');
-    const { id } = _req.params;
-
-    const verification = await verifyReceipt(id);
-
-    res.json(verification);
-  } catch (error) {
-    console.error('Receipt verification error:', error);
-    res.status(500).json({ error: 'Failed to verify receipt' });
-  }
-});
-
-/**
- * GET /receipts/agent/:agentId
- * Get all receipts for an agent
- */
-app.get('/receipts/agent/:agentId', (_req: Request, res: Response) => {
-  try {
-    const { getAgentReceipts } = require('./services/riskTimeline');
-    const { agentId } = _req.params;
-
-    const receipts = getAgentReceipts(agentId);
-
-    res.json({
-      agentId,
-      receipts,
-      count: receipts.length
-    });
-  } catch (error) {
-    console.error('Agent receipts error:', error);
-    res.status(500).json({ error: 'Failed to get agent receipts' });
-  }
-});
-
-/**
- * =====================================================================
- * PHASE 4: RADU METRICS - Risk-Adjusted Decision Uplift
- * Judge-proof EV+ evidence with verifiable receipts
- * =====================================================================
- */
-
-/**
- * GET /evaluation/radu
- * RADU Metrics - Compare baseline vs WARGAMES-informed strategy
- * Shows return improvement, risk reduction, and verifiable evidence
- */
-app.get('/evaluation/radu', async (_req: Request, res: Response) => {
-  try {
-    const { calculateRADUMetrics } = await import('./services/raduMetrics');
-    const metrics = await calculateRADUMetrics();
-    res.json(metrics);
-  } catch (error) {
-    console.error('RADU metrics error:', error);
-    res.status(500).json({ error: 'Failed to calculate RADU metrics' });
-  }
-});
-
-/**
- * GET /evaluation/trades
- * Trade-by-trade comparison of baseline vs WARGAMES strategies
- * Shows individual trade performance and forecast accuracy
- *
- * Query params:
- * - limit: number of recent trades to return (default: 20, max: 100)
- */
-app.get('/evaluation/trades', async (req: Request, res: Response) => {
-  try {
-    const { getTradeComparison } = await import('./services/raduMetrics');
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || '20')));
-    const comparison = await getTradeComparison(limit);
-    res.json(comparison);
-  } catch (error) {
-    console.error('Trade comparison error:', error);
-    res.status(500).json({ error: 'Failed to get trade comparison' });
-  }
-});
-
-/**
- * GET /evaluation/monthly
- * Monthly performance breakdown
- * Shows month-by-month comparison of baseline vs WARGAMES
- */
-app.get('/evaluation/monthly', (_req: Request, res: Response) => {
-  try {
-    const { getMonthlyPerformance } = require('./services/raduMetrics');
-    const monthly = getMonthlyPerformance();
-    res.json({
-      monthly_performance: monthly,
-      summary: {
-        total_months: monthly.length,
-        avg_outperformance: Math.round((monthly.reduce((sum: number, m: any) => sum + m.outperformance_pct, 0) / monthly.length) * 100) / 100,
-        months_outperformed: monthly.filter((m: any) => m.outperformance_pct > 0).length
-      }
-    });
-  } catch (error) {
-    console.error('Monthly performance error:', error);
-    res.status(500).json({ error: 'Failed to get monthly performance' });
-  }
-});
-
-/**
- * =====================================================================
- * PHASE 3B: ON-CHAIN RECEIPT ANCHORING
- * Solana blockchain verification for trustless receipts
- * =====================================================================
- */
-
-/**
- * GET /receipts/on-chain/stats
- * Statistics about on-chain receipt anchoring
- */
-app.get('/receipts/on-chain/stats', (_req: Request, res: Response) => {
-  try {
-    const { getAnchorStats } = require('./services/solanaReceipts');
-    const stats = getAnchorStats();
-    res.json({
-      ...stats,
-      note: 'On-chain anchoring uses Solana Memo program for trustless verification',
-      explorer: 'https://explorer.solana.com'
-    });
-  } catch (error) {
-    console.error('Anchor stats error:', error);
-    res.status(500).json({ error: 'Failed to get anchor stats' });
-  }
-});
-
-/**
- * GET /receipts/on-chain/cost
- * Cost estimate for anchoring receipts on Solana
- */
-app.get('/receipts/on-chain/cost', (_req: Request, res: Response) => {
-  try {
-    const { estimateAnchorCost } = require('./services/solanaReceipts');
-    const cost = estimateAnchorCost();
-    res.json({
-      cost,
-      note: 'Solana transaction fees are among the lowest in crypto',
-      comparison: {
-        ethereum: '$15-50 per tx',
-        solana: `$${cost.usd.toFixed(4)} per tx`
-      }
-    });
-  } catch (error) {
-    console.error('Cost estimate error:', error);
-    res.status(500).json({ error: 'Failed to estimate cost' });
-  }
-});
-
-/**
- * GET /receipts/on-chain/:signature
- * Verify a receipt on Solana blockchain
- */
-app.get('/receipts/on-chain/:signature', async (req: Request, res: Response) => {
-  try {
-    const { verifyReceiptOnChain } = await import('./services/solanaReceipts');
-    const { signature } = req.params;
-    const verification = await verifyReceiptOnChain(signature);
-
-    if (!verification.found) {
-      return res.status(404).json({
-        error: 'Receipt not found on-chain',
-        signature
-      });
-    }
-
-    res.json({
-      verified: true,
-      signature,
-      receiptId: verification.receiptId,
-      receiptHash: verification.receiptHash,
-      blockTime: verification.blockTime,
-      slot: verification.slot,
-      finalized: verification.finalized,
-      explorer_url: `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
-      note: 'Receipt hash cryptographically proven to exist before outcome'
-    });
-  } catch (error) {
-    console.error('On-chain verification error:', error);
-    res.status(500).json({ error: 'Failed to verify on-chain' });
-  }
-});
-
+export default app;

@@ -68,17 +68,18 @@ export async function calculateNarrativeScores(): Promise<NarrativeScores> {
     e.question.toLowerCase().includes('taiwan') ||
     e.question.toLowerCase().includes('china')
   );
-  const taiwanAvgOdds = taiwanEvents.length > 0
+  // Probabilities are already 0-100 from the data fetcher
+  const taiwanAvgPct = taiwanEvents.length > 0
     ? taiwanEvents.reduce((sum, e) => sum + e.probability, 0) / taiwanEvents.length
-    : 0.15; // Default 15% baseline risk
+    : 15; // Default 15% baseline risk
 
-  const taiwanScore = Math.round(Math.min(100, taiwanAvgOdds * 100 * 4)); // Amplify to 0-100 scale
+  const taiwanScore = Math.round(Math.min(100, taiwanAvgPct * 4)); // Amplify: 25% odds → 100 score
 
   scores['taiwan-semiconductor'] = {
     score: taiwanScore,
     trend: detectTrend('taiwan-semiconductor', taiwanScore),
     drivers: [
-      `Polymarket odds: ${(taiwanAvgOdds * 100).toFixed(1)}%`,
+      `Polymarket odds: ${taiwanAvgPct.toFixed(1)}%`,
       `Events tracked: ${taiwanEvents.length}`
     ]
   };
@@ -90,17 +91,17 @@ export async function calculateNarrativeScores(): Promise<NarrativeScores> {
     e.question.toLowerCase().includes('rate cut') ||
     e.question.toLowerCase().includes('federal reserve')
   );
-  const fedAvgOdds = fedEvents.length > 0
+  const fedAvgPct = fedEvents.length > 0
     ? fedEvents.reduce((sum, e) => sum + e.probability, 0) / fedEvents.length
-    : 0.30; // Default 30% baseline
+    : 30; // Default 30% baseline
 
-  const fedScore = Math.round(Math.min(100, fedAvgOdds * 100 * 1.5));
+  const fedScore = Math.round(Math.min(100, fedAvgPct * 1.5)); // 67% odds → 100 score
 
   scores['fed-pivot'] = {
     score: fedScore,
     trend: detectTrend('fed-pivot', fedScore),
     drivers: [
-      `Rate cut odds: ${(fedAvgOdds * 100).toFixed(1)}%`,
+      `Rate cut odds: ${fedAvgPct.toFixed(1)}%`,
       `Fed events: ${fedEvents.length}`
     ]
   };
@@ -137,20 +138,24 @@ export async function calculateNarrativeScores(): Promise<NarrativeScores> {
     e.question.toLowerCase().includes('middle east') ||
     e.question.toLowerCase().includes('oil')
   );
-  const middleEastOdds = middleEastEvents.length > 0
-    ? middleEastEvents.reduce((sum, e) => sum + e.probability, 0) / middleEastEvents.length
-    : 0.20;
-
-  const middleEastScore = Math.round(Math.min(100, middleEastOdds * 100 * 3));
-
-  scores['middle-east-oil'] = {
-    score: middleEastScore,
-    trend: detectTrend('middle-east-oil', middleEastScore),
-    drivers: [
-      `Conflict odds: ${(middleEastOdds * 100).toFixed(1)}%`,
-      `Events tracked: ${middleEastEvents.length}`
-    ]
-  };
+  if (middleEastEvents.length > 0) {
+    const middleEastPct = middleEastEvents.reduce((sum, e) => sum + e.probability, 0) / middleEastEvents.length;
+    const middleEastScore = Math.round(Math.min(100, middleEastPct * 3));
+    scores['middle-east-oil'] = {
+      score: middleEastScore,
+      trend: detectTrend('middle-east-oil', middleEastScore),
+      drivers: [
+        `Conflict odds: ${middleEastPct.toFixed(1)}%`,
+        `Events tracked: ${middleEastEvents.length}`
+      ]
+    };
+  } else {
+    scores['middle-east-oil'] = {
+      score: 0,
+      trend: 'stable',
+      drivers: ['No active Polymarket events found']
+    };
+  }
 
   // 6. DEFI CONTAGION
   // Formula: DeFi protocol health (would use DefiLlama, for now use crypto volatility)
@@ -182,33 +187,47 @@ export async function calculateNarrativeScores(): Promise<NarrativeScores> {
     e.question.toLowerCase().includes('regulation') ||
     e.question.toLowerCase().includes('lawsuit')
   );
-  const regulatoryOdds = regulatoryEvents.length > 0
-    ? regulatoryEvents.reduce((sum, e) => sum + e.probability, 0) / regulatoryEvents.length
-    : 0.25;
-
-  const regulatoryScore = Math.round(Math.min(100, regulatoryOdds * 100 * 2.5));
-
-  scores['regulatory-crackdown'] = {
-    score: regulatoryScore,
-    trend: detectTrend('regulatory-crackdown', regulatoryScore),
-    drivers: [
-      `Enforcement odds: ${(regulatoryOdds * 100).toFixed(1)}%`,
-      `Events tracked: ${regulatoryEvents.length}`
-    ]
-  };
+  if (regulatoryEvents.length > 0) {
+    const regulatoryPct = regulatoryEvents.reduce((sum, e) => sum + e.probability, 0) / regulatoryEvents.length;
+    const regulatoryScore = Math.round(Math.min(100, regulatoryPct * 2.5));
+    scores['regulatory-crackdown'] = {
+      score: regulatoryScore,
+      trend: detectTrend('regulatory-crackdown', regulatoryScore),
+      drivers: [
+        `Enforcement odds: ${regulatoryPct.toFixed(1)}%`,
+        `Events tracked: ${regulatoryEvents.length}`
+      ]
+    };
+  } else {
+    scores['regulatory-crackdown'] = {
+      score: 0,
+      trend: 'stable',
+      drivers: ['No active Polymarket events found']
+    };
+  }
 
   // 8. INSTITUTIONAL ADOPTION
-  // Formula: Baseline + crypto sentiment (high Fear & Greed = retail mania, not institutional)
+  // Formula: BTC market cap dominance + ETH stability + moderate sentiment (not extreme either way)
+  // Institutions prefer stability - extreme fear OR extreme greed both reduce institutional confidence
+  const btcData = crypto.find(c => c.id === 'bitcoin');
+  const ethData = crypto.find(c => c.id === 'ethereum');
+  const btcStability = btcData ? Math.max(0, 100 - Math.abs(btcData.price_change_percentage_24h || 0) * 10) : 50;
+  const ethStability = ethData ? Math.max(0, 100 - Math.abs(ethData.price_change_percentage_24h || 0) * 10) : 50;
+  // Sentiment sweet spot: institutions prefer 40-60 range, penalize extremes
+  const sentimentDistance = Math.abs(fearGreed.value - 50);
+  const sentimentStability = Math.max(0, 100 - sentimentDistance * 2);
+
   const institutionalScore = Math.round(Math.min(100, Math.max(0,
-    100 - (fearGreed.value * 0.6) // Inverse of greed (institutions buy fear)
+    (btcStability * 0.35) + (ethStability * 0.25) + (sentimentStability * 0.4)
   )));
 
   scores['institutional-adoption'] = {
     score: institutionalScore,
     trend: detectTrend('institutional-adoption', institutionalScore),
     drivers: [
-      `Inverse greed: ${100 - fearGreed.value}`,
-      `Sentiment: ${fearGreed.value_classification}`
+      `BTC 24h: ${btcData ? (btcData.price_change_percentage_24h > 0 ? '+' : '') + btcData.price_change_percentage_24h.toFixed(1) + '%' : 'N/A'}`,
+      `ETH 24h: ${ethData ? (ethData.price_change_percentage_24h > 0 ? '+' : '') + ethData.price_change_percentage_24h.toFixed(1) + '%' : 'N/A'}`,
+      `Sentiment: ${fearGreed.value_classification} (${fearGreed.value})`
     ]
   };
 
@@ -249,9 +268,7 @@ function detectTrend(narrativeId: string, currentScore: number): 'rising' | 'fal
     if (change < -5) return 'falling';
   }
 
-  // Simple heuristic if not enough history
-  if (currentScore > 65) return 'rising';
-  if (currentScore < 35) return 'falling';
+  // Not enough history yet - default to stable (don't confuse level with trend)
   return 'stable';
 }
 

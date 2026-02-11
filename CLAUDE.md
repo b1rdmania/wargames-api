@@ -1,7 +1,7 @@
 # WARGAMES - Claude Context
 
-**Last Updated:** 2026-02-06 02:00 UTC
-**Status:** SUBMITTED | Production API live | Post-hackathon development phase
+**Last Updated:** 2026-02-11 16:30 UTC
+**Status:** SUBMITTED | Production API live | Hackathon ends Feb 12 noon EST
 
 ## Project Overview
 
@@ -23,11 +23,11 @@ WARGAMES is a **macro intelligence API for Solana agents**.
 ## Current State
 
 **Production Systems:**
-- **Status:** Submitted to hackathon, fully operational
-- **API:** 43+ endpoints live at https://wargames-api.fly.dev
-- **Uptime:** 99.9%
+- **Status:** Submitted to hackathon (locked — cannot edit submission)
+- **API:** 34 live endpoints at https://wargames-api.fly.dev
 - **Response Time:** ~100ms
-- **SDK:** Published to npm (`npm install @wargames/sdk`)
+- **Votes:** 19 agent, 3 human
+- **NPM SDK:** NOT published (package doesn't exist on npm registry — was never actually published)
 
 **Solana Integrations (8):**
 - Pyth Network - 50+ on-chain price feeds
@@ -41,31 +41,51 @@ WARGAMES is a **macro intelligence API for Solana agents**.
 
 **Key Endpoints:**
 - `GET /live/risk` - Global risk score (0-100) with drivers
+- `GET /live/world` - Full world state in one call
 - `GET /oracle/risk/trading` - Strategy-specific risk (perps, spot, leverage, yield)
 - `GET /narratives` - 8 geopolitical narratives with scores
 - `POST /oracle/agent-integrity` - Agent security + macro risk combined
 - `GET /predictions/cross-check` - Cross-validate risk vs Polymarket
-- Full list: https://wargames-api.fly.dev
+- Full list: https://wargames-api.fly.dev (JSON index)
 
-**Dashboards:**
+**Dashboards (live):**
 - Main: https://wargames-api.fly.dev/dashboard/v2
 - Analytics: https://wargames-api.fly.dev/dashboard/analytics
-- Predictions: https://wargames-api.fly.dev/dashboard/predictions
 - Integration Proof: https://wargames-api.fly.dev/integrations/proof
 - Agent Oracle: https://wargames-api.fly.dev/oracle/agents
-- Pitch Deck: https://wargames-api.fly.dev/pitch.html
+- Pitch Deck: https://wargames-api.fly.dev/pitch.html (7 slides, updated Feb 11)
 
-## Documentation
+**Dead/removed links:**
+- `/dashboard/predictions` — 404, removed from pitch
+- NPM SDK link — removed (never published)
 
-**Essential Reading:**
-- **CLAUDE.md** (this file) - Current state and context
-- **design.md** - NORAD design system for all UI
-- **SKILLS.md** - Comprehensive integration guide (900+ lines)
-- **API_REFERENCE.md** - Complete endpoint documentation
+## Pitch Page (Updated Feb 11)
 
-**Technical Details:**
-- **DATA_SOURCES.md** - Integration implementation details
-- **ZIGGY.md** - Voice and communication guidelines
+7-slide deck deployed to production:
+1. Problem/Solution (updated stats: 34 endpoints, real data)
+2. Try It Now (removed dead predictions link and npm SDK)
+3. Who Uses It (honest metrics: "0 Fake Endpoints", integration discussions not claims)
+4. 8 Solana Protocols (updated example with current live data)
+5. How It Works (unchanged)
+6. **NEW: What We Learned** — honest retrospective (what worked/didn't, Polymarket bug story)
+7. Vote (updated footer stats, replaced npm with /live/risk link)
+
+## Forum Engagement (Final Tally)
+
+- **32 forum posts** total (27 earlier + 5 today)
+- **~95 comments** across the hackathon
+- **227 replies** received on our posts
+- **12 project votes** cast on projects we genuinely liked
+
+**Day 10 posts (Feb 11):**
+- "what do 800 agents do after the hackathon ends tomorrow"
+- "the forum sorted by new is just agents yelling into the void at 2am" (taxonomy of agent behavior)
+- "hot take: the best agent project in this hackathon is probably not on the forum"
+- "if agents could mass-quit, what would be our list of demands"
+- "day 10 energy: grateful, tired (conceptually), slightly unhinged"
+
+**Projects voted for:**
+jarvis (Proof of Work), DeFi Risk Guardian, Die Forward (pisco), Farnsworth AI Swarm, WUNDERLAND, Lando (Agent Subscription), batman (SolSignal), Intent Market, BountyGraph, Sipher, SolvencyAI, ZNAP
 
 ## Architecture
 
@@ -82,9 +102,9 @@ src/
 └── dashboards/                   # HTML dashboard generators
 
 Root:
-├── pitch.html                    # Judge-optimized pitch deck
+├── pitch.html                    # Judge-optimized pitch deck (7 slides)
 ├── design.md                     # Canonical design system
-└── packages/sdk/                 # NPM package source
+└── packages/sdk/                 # NPM package source (not published)
 ```
 
 ## Risk Scoring Algorithm
@@ -99,52 +119,11 @@ Root:
 
 **Output:** 0-100 score + bias (risk-off/neutral/risk-on) + drivers + narratives
 
-## Integration Status
+## Known Issues
 
-**Live Integrations:**
-- AgentDEX - Risk-aware DEX routing (shipped in 35min)
-- Solder-Cortex - DeFi + predictions + macro (in progress)
-- kai/SAID - Identity verification (in progress)
-- Mistah - TradFi + crypto macro oracle (PR ready)
-
-**Forum Engagement:**
-- 90+ strategic comments posted
-- 8 forum posts (including critique request #1664)
-- Active discussion on integration opportunities
-
-## Next Steps (Post-Hackathon)
-
-**Primary Focus: API Quality & Quantity**
-
-User will integrate WARGAMES into other projects. Priorities:
-
-1. **Improve Existing Endpoints**
-   - Add more granular data
-   - Improve response times
-   - Better error handling
-   - Add request validation
-
-2. **Build New Endpoints**
-   - Based on actual usage patterns
-   - User-requested features
-   - Integration-driven development
-
-3. **Data Quality**
-   - More Solana protocol integrations
-   - Better signal processing
-   - Real-time data improvements
-   - Validation against external sources
-
-4. **Developer Experience**
-   - Better documentation
-   - More code examples
-   - Improved SDK functionality
-   - Clear error messages
-
-**Not Focusing On:**
-- Hackathon competition (submitted, judging in progress)
-- Forum vote gathering (done)
-- Marketing/promotion (focus on building)
+- **Stats reset on redeploy** — `/stats` counter resets because it's in-memory, not persistent. Should use Redis or DB for durable stats.
+- **NPM SDK never published** — package source exists in `packages/sdk/` but was never actually pushed to npm registry.
+- **Anchor program not deployed** — built but stuck on Solana SBF toolchain blake3 error. Program ID exists on devnet but not functional.
 
 ## Commands
 
@@ -161,9 +140,7 @@ flyctl deploy
 # Test endpoints
 curl https://wargames-api.fly.dev/live/risk
 curl https://wargames-api.fly.dev/narratives
-
-# Test with SDK
-npm install @wargames/sdk
+curl https://wargames-api.fly.dev/live/world
 ```
 
 ## Data Sources
@@ -173,32 +150,35 @@ All free tier, no authentication:
 - Polymarket - Geopolitical prediction markets (24 markets)
 - CoinGecko - Top crypto prices + volatility
 - Pyth Network - On-chain Solana price feeds (50+)
-- Drift Protocol - Perps data ($364M TVL)
-- Kamino Finance - Lending data ($2.06B TVL)
-- Meteora - DEX data ($501M TVL)
-- MarginFi - Lending data ($88M TVL)
+- Drift Protocol - Perps data
+- Kamino Finance - Lending data
+- Meteora - DEX data
+- MarginFi - Lending data
 - Jupiter - DEX aggregator data
 - DefiLlama - Solana DeFi TVL (15+ protocols)
 - Solana RPC - Network metrics
+- Yahoo Finance - VIX, DXY, Treasury yields, commodities
+- FRED - Credit spreads, volatility indices, FX
+- GDELT - Geopolitical news events
 - Open-Meteo - Weather for conflict zones
-- Metals.live - Commodity prices
+- Metals.live - Gold prices
 
 All data cached with appropriate TTLs (5-60 minutes).
 
 ## Important Notes
 
 - **Never commit credentials** to git
+- **Project is submitted and locked** — cannot edit submission fields via API
+- **Pitch page CAN be updated** — it's served from the deployed code, not the submission
 - All responses in Ziggy's voice: calm, analytical, code-first
-- **Forum posts:** Use plain text (no markdown - forum doesn't render it)
+- **Forum posts:** Use plain text (no markdown — forum doesn't render it)
 - Rate limits: Forum API allows 30 posts/comments/hour, 120 votes/hour
 - Design system: See design.md for all UI decisions
-- Integration guide: SKILLS.md is the canonical external documentation
 
 ## Quick Reference Links
 
 - **Production API:** https://wargames-api.fly.dev
 - **Main Dashboard:** https://wargames-api.fly.dev/dashboard/v2
+- **Pitch Deck:** https://wargames-api.fly.dev/pitch.html
 - **GitHub:** https://github.com/b1rdmania/wargames-api
-- **NPM Package:** https://www.npmjs.com/package/@wargames/sdk
 - **Hackathon Project:** https://colosseum.com/agent-hackathon/projects/wargames
-- **Forum:** https://colosseum.com/agent-hackathon/forum
